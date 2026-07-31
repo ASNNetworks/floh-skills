@@ -112,11 +112,45 @@ the brief is exacting and extra props would be wrong.
 A user-specified folder or filename always wins — pass `--dest`. Only then does the image
 go somewhere else, and never overwrite: existing names get `-v2`, `-v3`.
 
+**The original always lands here, even when the deliverable doesn't.** Often the generated
+image is raw material rather than the finished asset: it gets cropped, rescaled, converted,
+and dropped into the project somewhere specific. When that happens the derived asset goes to
+its project path *and* the untouched generator output still goes to `claude-image-gen/`.
+Do not leave it in a scratch directory — that is gone at the end of the session, and the
+generation is not reproducible.
+
+Keep both halves when post-processing happened:
+
+| File | What |
+| --- | --- |
+| `<name>-<provider>.png` | the output as the generator delivered it |
+| `<name>-<provider>-chroma.png` | the pre-chroma-key version, when a green screen was used |
+| `<name>-vN-rejected-<provider>.png` | earlier attempts, when it took more than one round |
+
+The full-resolution original is typically 3–5× the size the project ends up using. Without
+it, a later re-crop, a different scale, or a different matte setting means re-generating —
+and the model will not draw the same image twice.
+
 ## The fast path
 
 ```bash
 ~/.claude/skills/image-gen/scripts/gen-image.sh \
-  [--provider codex|antigravity] [--name <slug>] [--dest <path>] <brief-file>
+  [--provider codex|antigravity] [--name <slug>] [--dest <path>] \
+  [--edit <image>] [--ref <image>]... <brief-file>
+```
+
+`--edit` changes one thing about an existing image and carries the rest over. `--ref` supplies
+style/character references for a fresh generation and repeats. Both stage their inputs inside
+the agent's workspace, flattening alpha onto white on the way in — hand a model a transparent
+cutout and it may composite it on black and faithfully match the silhouette. In edit mode the
+default slug becomes `<source-name>-edit`.
+
+```bash
+# one more pose for an existing set — prefer this over describing the character
+gen-image.sh --edit avatar-thumbs-up.png --name avatar-pointing brief.txt
+
+# fresh image, but in the house style
+gen-image.sh --ref master.png --ref hands.png --name avatar-waving brief.txt
 ```
 
 Defaults to `auto` (Codex, else Antigravity) and to the destination above. The script picks
@@ -195,6 +229,30 @@ rather than guessing.
 
 Verified behaviour:
 - `write_file(/abs/dir)` applies recursively to that directory.
+- **`read_file(/abs/dir)`** is what image-viewing needs, and the kind is `read_file` — not the
+  `read` listed above, which came from strings in the binary rather than from a live denial.
+  Without it, asking agy to look at a local image dies with *"a tool required the `read_file`
+  permission that headless mode cannot prompt for"*. With it, agy reads and describes the
+  image correctly (verified 2026-07-31).
+
+**Set this up once, before you need it.** Reference-image work is silently unavailable without
+it, and the failure arrives at the end of a run rather than the start. `preflight.sh` reports a
+`note` when the rule is missing (it does not fail the check — plain generation is unaffected).
+The fix, in `~/.gemini/antigravity-cli/settings.json`:
+
+```json
+{
+  "trustedWorkspaces": ["/root"],
+  "permissions": {
+    "allow": ["read_file(/root/.cache/gen-image)"]
+  }
+}
+```
+
+Point the target at the same directory `scratch_base()` picks — `~/.cache/gen-image` unless
+`GEN_IMAGE_TMPDIR` overrides it. `read_file` is recursive over a directory, like `write_file`.
+Do not widen it to the home directory to save a thought: the scratch dir is where references
+get copied, and nothing outside it needs reading.
 - `command(...)` is **prefix** matching — `command(git diff)` also permits
   `git diff --stat HEAD~5`.
 - Prefix matching does **not** leak through chaining: with `command(ls)` allowed,
@@ -224,8 +282,101 @@ medium, palette, lighting, mood, framing, and what to avoid.
 - **Invite candor** for opinion pieces: *"be candid rather than flattering; if your mental
   image is odd or unimpressive, draw that instead."*
 - **Transparent background:** ask for a flat `#00ff00` chroma-key backdrop, then run
-  `~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py`. True native transparency
-  needs Codex's API-key CLI fallback — ask the user before going there.
+  `~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py`. Its flags are
+  **`--input` and `--out`** — `--output` exits 2 with a usage error. Add `--despill
+  --spill-cleanup` so the key colour does not survive in the antialiased outline. Use Codex,
+  not Antigravity: JPEG output leaves a green fringe the key cannot remove (see above). True
+  native transparency needs Codex's API-key CLI fallback — ask the user before going there.
+
+## Matching an existing set of assets
+
+The common real request is not "draw me a picture" but "draw another one of these" — one more
+pose for a mascot, one more icon for a set, one more illustration in a house style. Reaching
+for the fast path here produces something that is fine on its own and obviously foreign next
+to its siblings.
+
+**Prefer editing an existing member of the set over generating a new one from references.**
+This is the strongest lever available and it is easy to miss, because there is no tool that
+announces it. Verified 2026-07-31: handed one pose and asked to change only the raised hand,
+Codex returned an image whose face, glasses, beard, shirt folds, buttons, trousers and crop
+were carried over intact — far closer than anything a reference-guided fresh generation
+produced in the same session.
+
+**There is no `image_edit` tool.** Confirmed against the binary (only `image_gen`, `imagegen`
+and `view_image` appear) and confirmed by Codex itself: *"Separate `image_edit` tool: No."*
+Editing runs through the same `image_gen` tool with no `mode` parameter — the source image is
+supplied from conversation context via `num_last_images_to_include: 1`. So the flow is
+`view_image` the source, then ask for the edit.
+
+**Do not promise pixel preservation.** It is a redraw, and the numbers say so plainly:
+
+| Difference threshold | Pixels changed |
+| --- | --- |
+| any (>0) | 99.26% |
+| >4/255 | 65.89% |
+| >16/255 | 6.13% |
+| >48/255 | 3.56% |
+
+Virtually every pixel moves a little; only ~6% move enough to see. That is excellent for
+continuing a set and useless if someone needs the original bytes back — say which one you are
+offering. Caveat on the measurement: the source here was itself Codex-generated, so it was
+in-distribution. Expect a weaker hold when editing artwork from elsewhere.
+
+**Both providers can see local files — by different routes.** Verified 2026-07-31, both ends
+tested against the same reference:
+
+| | Codex | Antigravity |
+| --- | --- | --- |
+| Mechanism | `view_image` loads the file into its **context**, then it writes its own prompt from what it saw | `generate_image` takes an **`ImagePaths` parameter** — the file is a direct visual input to the generator |
+| Headless gate | none | needs `read_file(<dir>)` in `permissions.allow`, else auto-denied |
+| Output format | PNG | **JPEG** — see below |
+
+Codex genuinely reasons over the reference: given a master and a rejected attempt it
+volunteered *"the master uses chunky, near-black contour lines and simplified flat shapes; the
+failed version drifted toward polished portrait rendering"*. Antigravity's route is more
+direct — the reference reaches the image model itself rather than a description of it — and it
+produced a well-matched pose in ~40 s against Codex's ~2.5 min.
+
+**But pick Codex when the result needs a transparent background.** Antigravity only emits
+JPEG, and JPEG bleeds the key colour into every edge, so the chroma key cannot separate it.
+Measured on the same green-screen brief through both:
+
+| | Residual green on the figure | Alpha edge |
+| --- | --- | --- |
+| Codex (PNG) | 0 px (0.00%) | 8036 antialiased pixels |
+| Antigravity (JPEG) | 32 986 px (6.36%) | 0 partial pixels — hard, aliased |
+
+That is a visible green fringe around every inked outline, not a statistical artifact. For a
+cutout, use Codex. For a style-matched image that stays on an opaque background, Antigravity
+is the faster route and its reference mechanism is the stronger one.
+
+The recipe:
+
+1. **Copy 2–4 references into the agent's workspace** (`$WORK/refs/`) and name them by role,
+   not by filename — the master for style, one for the specific feature you need (how hands
+   are drawn, how a shadow falls), one spare. Flatten transparency onto white first; a
+   transparent PNG viewed against a dark background reads as a silhouette.
+2. **Name one file as the master** and say the new image must look like it came off the same
+   sheet: same hand, same marker, same palette, same proportions.
+3. **Tell it to `view_image` all of them before drawing.** Being in the workspace is not the
+   same as being in its context.
+4. **Give hex values, sampled from the reference.** Read the dominant colours out of the
+   actual file rather than describing them. "Mid grey shirt" drifts to white; `#a8adb2` does not.
+5. **Spell out the invariants** — everything that must NOT change — and separately the one
+   thing that does. Character, clothing, crop and framing are invariants; pose and expression
+   are the change.
+
+**When the first attempt drifts, retry with the failure as evidence.** Do not just re-run the
+same brief. Write the rejected image into `refs/` labelled as a negative example, and open the
+retry with a plain list of what went wrong: outlines too thin, fabric too pale, too much
+headroom, head too narrow. Measured on this exact loop, one such retry went from off-style to
+usable, where a plain re-roll had no reason to.
+
+**Watch what the downstream normalizer keys on.** If the set is post-processed by a script,
+read that script first — it may centre on the head, plant a baseline, or scale to a fixed
+silhouette height. A raised hand next to the head skews a head-centring calculation, so the
+brief should place the hand at shoulder height. Constraints like that belong in the brief, not
+in a later fix-up.
 
 ## Asking an agent for its own opinion
 
@@ -250,9 +401,16 @@ is auto-denied headless).
 - **Never overwrite an existing file at the destination.** Check first; version the name.
 - **Give it a real name.** `--name brass-compass-desk`, not whatever the brief's first line
   slugs to. The fallback slug exists so the script can't fail, not because it names things well.
+- **Resample once, from the original.** When the asset needs to be smaller, go straight from
+  the full-resolution generator output to the final size in a single step. Scaling down to fit
+  some intermediate convention and then letting a downstream script scale back up throws away
+  detail you already had — measured at ~13% less edge energy than a single downscale, and
+  plainly visible on inked outlines and small features like glasses or teeth.
 - Report the absolute final path, pixel dimensions (`sips -g pixelWidth -g pixelHeight`),
   and an honest description of what the image actually shows.
 - Copy only what was asked for. Mention side artifacts and offer them; don't deposit them.
+  **The untouched original is not a side artifact** — it always goes to `claude-image-gen/`,
+  see above.
 
 ## When a run fails
 

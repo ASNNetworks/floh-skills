@@ -1,19 +1,32 @@
 #!/usr/bin/env bash
-# Generate an image by driving a local coding agent that has an image tool.
+# Generate or edit an image by driving a local coding agent that has an image tool.
 #
-#   gen-image.sh [--provider codex|antigravity|auto] [--name <slug>] [--dest <path>] <brief-file>
+#   gen-image.sh [--provider codex|antigravity|auto] [--name <slug>] [--dest <path>]
+#                [--edit <image>] [--ref <image>]... <brief-file>
 #
 # Providers:
 #   codex        OpenAI Codex CLI, built-in image_gen tool      -> PNG
 #   antigravity  Google Antigravity CLI (agy), generate_image   -> JPEG
 #   auto         codex if present, else antigravity (default)
 #
+# Modes:
+#   (default)    generate from the brief alone
+#   --edit IMG   change one thing about IMG and carry the rest over. Much stronger
+#                continuity than describing the original in words — but it is a redraw,
+#                not a patch: ~99% of pixels move a little, ~6% move visibly.
+#   --ref IMG    supply IMG as a style/character reference for a fresh generation.
+#                Repeatable; 2-4 is the useful range. Combines with --edit.
+#
 # Destination (unless --dest overrides):
 #   <repo-root>/claude-image-gen/<slug>-<provider>.png
 # where <repo-root> is the git root of $PWD, or $PWD when not in a repo, and
-# <slug> is --name or a slug derived from the first line of the brief.
+# <slug> is --name, else "<edit-source>-edit" in edit mode, else a slug from the
+# brief's first line.
 #
 # Never overwrites; versions to -v2, -v3. Converts format with sips when needed.
+#
+# --edit/--ref with antigravity need a read_file allow-rule covering the scratch dir
+# (see preflight.sh); headless agy cannot prompt for it and the run dies mid-flight.
 
 set -euo pipefail
 
@@ -130,7 +143,7 @@ print("  pixelHeight: %d" % h)
 PY
 }
 
-PROVIDER="auto"; DEST=""; NAME=""
+PROVIDER="auto"; DEST=""; NAME=""; EDIT_SRC=""; REFS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --provider) PROVIDER="${2:-}"; shift 2 ;;
@@ -139,7 +152,11 @@ while [ $# -gt 0 ]; do
     --dest=*) DEST="${1#*=}"; shift ;;
     --name) NAME="${2:-}"; shift 2 ;;
     --name=*) NAME="${1#*=}"; shift ;;
-    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    --edit) EDIT_SRC="${2:-}"; shift 2 ;;
+    --edit=*) EDIT_SRC="${1#*=}"; shift ;;
+    --ref) REFS+=("${2:-}"); shift 2 ;;
+    --ref=*) REFS+=("${1#*=}"); shift ;;
+    -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) break ;;
   esac
@@ -148,6 +165,14 @@ done
 [ $# -ge 1 ] || { echo "usage: $0 [--provider P] [--name SLUG] [--dest PATH] <brief-file>" >&2; exit 2; }
 BRIEF="$1"
 [ -r "$BRIEF" ] || { echo "brief file not readable: $BRIEF" >&2; exit 2; }
+
+# Fail on an unreadable input image now, not two minutes into an agent run.
+if [ -n "$EDIT_SRC" ]; then
+  [ -r "$EDIT_SRC" ] || { echo "--edit image not readable: $EDIT_SRC" >&2; exit 2; }
+fi
+for r in ${REFS[@]+"${REFS[@]}"}; do
+  [ -r "$r" ] || { echo "--ref image not readable: $r" >&2; exit 2; }
+done
 
 # ---- first-run preflight ----------------------------------------------------
 # On a machine that has never run this skill, check the setup and say exactly what is
@@ -207,6 +232,10 @@ esac
 if [ -z "$DEST" ]; then
   ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
   [ -n "$ROOT" ] || ROOT="$PWD"
+  if [ -z "$NAME" ] && [ -n "$EDIT_SRC" ]; then
+    # In edit mode the source name says more than the brief's first line does.
+    base="${EDIT_SRC##*/}"; NAME="${base%.*}-edit"
+  fi
   if [ -z "$NAME" ]; then
     # slug from the brief's first non-empty line: first 5 words, alnum only
     NAME="$(awk 'NF{print; exit}' "$BRIEF" \
@@ -225,16 +254,99 @@ PROMPT="$WORK/prompt.txt"
 LOG="$WORK/run.log"
 SRC=""
 
+# Stage input images inside the workspace. The agent only ever reads from there, which
+# keeps its file access scoped and makes one allow-rule enough for agy.
+#
+# Flatten alpha onto white on the way in: a transparent cutout handed to a model that
+# composites it on black reads as a silhouette, and it will faithfully match the silhouette.
+stage_image() {  # stage_image <src> <dst>
+  python3 - "$1" "$2" <<'PY' 2>/dev/null || cp "$1" "$2"
+import sys
+from PIL import Image
+src, dst = sys.argv[1], sys.argv[2]
+im = Image.open(src)
+if im.mode in ("RGBA", "LA", "P"):
+    im = im.convert("RGBA")
+    bg = Image.new("RGBA", im.size, (255, 255, 255, 255))
+    bg.alpha_composite(im)
+    im = bg
+im.convert("RGB").save(dst)
+PY
+}
+
+EDIT_BASE=""
+if [ -n "$EDIT_SRC" ]; then
+  EDIT_BASE="source.png"
+  stage_image "$EDIT_SRC" "$WORK/$EDIT_BASE"
+fi
+
+REF_BASES=()
+if [ ${#REFS[@]} -gt 0 ]; then
+  mkdir -p "$WORK/refs"
+  i=1
+  for r in "${REFS[@]}"; do
+    b="refs/ref-$(printf '%d' "$i")-$(echo "${r##*/}" | sed -e 's/\.[^.]*$//' -e 's/[^A-Za-z0-9]\+/-/g').png"
+    stage_image "$r" "$WORK/$b"
+    REF_BASES+=("$b")
+    i=$((i+1))
+  done
+fi
+
+# agy cannot prompt headless, so a missing read_file rule kills an edit/ref run at the
+# point the tool is called — minutes in, with nothing to show. Say so before spending that.
+if [ "$PROVIDER" = "antigravity" ] && { [ -n "$EDIT_SRC" ] || [ ${#REFS[@]} -gt 0 ]; }; then
+  python3 - "$HOME/.gemini/antigravity-cli/settings.json" "$WORK" <<'PY' >&2 || true
+import json, os, sys
+settings, work = sys.argv[1], sys.argv[2]
+try:
+    allow = ((json.load(open(settings)).get("permissions") or {}).get("allow") or [])
+except Exception:
+    allow = []
+w = os.path.abspath(work)
+for rule in allow:
+    if not rule.startswith("read_file("):
+        continue
+    t = os.path.abspath(os.path.expanduser(rule[len("read_file("):].rstrip(")")))
+    if w == t or w.startswith(t.rstrip("/") + "/"):
+        sys.exit(0)
+sys.stderr.write(
+    "warning: no read_file allow-rule covers %s, so agy will be denied the input image\n"
+    "         mid-run. Add to %s:\n"
+    '           "permissions": {"allow": ["read_file(%s)"]}\n'
+    % (work, settings, os.path.dirname(w)))
+PY
+fi
+
 echo "provider:  $PROVIDER"
 echo "workspace: $WORK"
+[ -n "$EDIT_SRC" ] && echo "edit of:   $EDIT_SRC"
+[ ${#REFS[@]} -gt 0 ] && echo "refs:      ${#REFS[@]}"
 echo "running (codex ~2min, antigravity ~20s)..." >&2
+
+# Written AFTER staging, so the fallback image search can never mistake an input image
+# we just copied in for the agent's output. Without this, a run that produced nothing
+# would happily deliver the unmodified source and look like a success.
+STAMP="$WORK/.stamp"; : > "$STAMP"
 
 if [ "$PROVIDER" = "codex" ]; then
   {
     cat "$BRIEF"
     printf '\n\n---\n'
-    printf 'Use your imagegen skill (the built-in image_gen tool, not the API-key CLI fallback) to generate this as a real raster image.\n'
-    printf 'Then copy your chosen final image out of $CODEX_HOME/generated_images/... into your current working directory, named exactly image.png\n'
+    if [ ${#REF_BASES[@]} -gt 0 ]; then
+      printf 'Reference images are in your working directory. Load EVERY one with your view_image tool BEFORE drawing, so they are in your conversation context:\n'
+      for b in "${REF_BASES[@]}"; do printf '  ./%s\n' "$b"; done
+      printf 'Treat the first one as the master: the new image must look like it came off the same sheet — same line weight, same palette, same proportions. The references are style guidance, not content to copy.\n'
+    fi
+    if [ -n "$EDIT_BASE" ]; then
+      printf 'This is an EDIT, not a fresh generation. The source image is at ./%s in your working directory.\n' "$EDIT_BASE"
+      printf 'First load it with your view_image tool so it is in conversation context.\n'
+      printf 'Then use the built-in image_gen tool on it. There is no separate image_edit tool and no mode parameter: supply the in-context image via num_last_images_to_include: 1 with an edit-specific prompt.\n'
+      printf 'Change ONLY what the brief above asks for. Carry everything else over unchanged — same character, same framing, same palette, same background.\n'
+      printf 'Then copy the result into your working directory, named exactly image.png\n'
+    else
+      printf 'Use your imagegen skill (the built-in image_gen tool, not the API-key CLI fallback) to generate this as a real raster image.\n'
+      printf 'Then copy your chosen final image out of $CODEX_HOME/generated_images/... into your current working directory, named exactly image.png\n'
+    fi
     printf 'Do not write anywhere outside your working directory. Do not ask follow-up questions. Produce the file, report its path, and finish.\n'
   } > "$PROMPT"
 
@@ -246,7 +358,7 @@ if [ "$PROVIDER" = "codex" ]; then
 
   SRC="$WORK/image.png"
   if [ ! -f "$SRC" ]; then
-    SRC="$(newest_image "$WORK" 1)"
+    SRC="$(newest_image "$WORK" 1 "$STAMP")"
   fi
 
 else
@@ -256,19 +368,33 @@ else
     cat "$BRIEF"
     printf '\n\n---\n'
     printf 'Use your generate_image tool to generate this as a real raster image.\n'
+    if [ -n "$EDIT_BASE" ] || [ ${#REF_BASES[@]} -gt 0 ]; then
+      # agy takes input images as a direct visual input to the generator via ImagePaths,
+      # which is a stronger route than describing them — so name the parameter explicitly.
+      printf 'Pass these files to generate_image as visual inputs via its ImagePaths parameter, using their absolute paths:\n'
+      [ -n "$EDIT_BASE" ] && printf '  %s/%s\n' "$WORK" "$EDIT_BASE"
+      for b in ${REF_BASES[@]+"${REF_BASES[@]}"}; do printf '  %s/%s\n' "$WORK" "$b"; done
+      if [ -n "$EDIT_BASE" ]; then
+        printf 'This is an EDIT of that first image. Change ONLY what the brief asks for and carry everything else over unchanged.\n'
+      else
+        printf 'Those are style references: match their line weight, palette and proportions. Do not copy their content.\n'
+      fi
+    fi
     printf 'Do NOT run any shell commands and do NOT use write_to_file — those are auto-denied in headless mode and will abort the run.\n'
     printf 'After the image tool returns, output the absolute filesystem path of the generated image on a line by itself, and nothing else.\n'
   } > "$PROMPT"
 
   BRAIN="$HOME/.gemini/antigravity-cli/brain"
-  STAMP="$WORK/.stamp"; : > "$STAMP"
 
   ( cd "$WORK" && "$AGY_BIN" --print-timeout 300s -p "$(cat "$PROMPT")" ) > "$LOG" 2>&1 || {
     echo "agy failed; tail of $LOG:" >&2; tail -30 "$LOG" >&2; exit 1
   }
   LASTMSG="$LOG"
 
-  SRC="$(grep -oE '/[^ `"'"'"']+\.(jpg|jpeg|png|webp)' "$LOG" 2>/dev/null | tail -1 || true)"
+  # The prompt now names input paths, and agy echoes them back, so filter out anything
+  # inside the workspace: those are images we handed IT, not images it produced.
+  SRC="$(grep -oE '/[^ `"'"'"']+\.(jpg|jpeg|png|webp)' "$LOG" 2>/dev/null \
+         | grep -v "^${WORK}/" | tail -1 || true)"
   if [ -z "${SRC:-}" ] || [ ! -f "$SRC" ]; then
     SRC="$(newest_image "$BRAIN" 99 "$STAMP")"
   fi

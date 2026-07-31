@@ -129,6 +129,30 @@ else:
 PY
 )"
   [ -n "$TRUST_NOTE" ] && problems+=("$TRUST_NOTE")
+
+  # Reference-image work needs a read_file allow-rule: headless agy cannot prompt for it, so
+  # without one, asking it to look at a local image is auto-denied. Plain generation still
+  # works, so this is a note rather than a problem.
+  READ_NOTE="$(python3 - "$AGY_SETTINGS" "$HOME/.cache/gen-image" <<'PY'
+import json, os, sys
+settings, candidate = sys.argv[1], sys.argv[2]
+try:
+    allow = ((json.load(open(settings)).get("permissions") or {}).get("allow") or [])
+except Exception:
+    sys.exit(0)
+c = os.path.abspath(candidate)
+for rule in allow:
+    if not rule.startswith("read_file("):
+        continue
+    t = os.path.abspath(os.path.expanduser(rule[len("read_file("):].rstrip(")")))
+    if c == t or c.startswith(t.rstrip("/") + "/"):
+        sys.exit(0)
+print('agy has no read_file allow-rule covering %s, so it cannot view reference images '
+      'headlessly (plain generation is unaffected). Add to %s: '
+      '"permissions": {"allow": ["read_file(%s)"]}' % (candidate, settings, candidate))
+PY
+)"
+  [ -n "$READ_NOTE" ] && notes+=("$READ_NOTE")
 fi
 
 command -v python3 >/dev/null 2>&1 || problems+=("python3 is not on PATH. The script needs it for image discovery and for reporting dimensions.")
