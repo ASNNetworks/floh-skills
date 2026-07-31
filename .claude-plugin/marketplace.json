@@ -5,9 +5,153 @@
     "url": "https://www.floh.solutions"
   },
   "metadata": {
-    "description": "Agent Skills by FLOH. Portable SKILL.md capabilities that work across Claude Code, Codex, Gemini CLI, Cursor and other skills-compatible agents."
+    "description": "Agent Skills by FLOH. Portable SKILL.md capabilities for Claude Code, Claude.ai, Codex, Cursor, Gemini CLI and OpenCode."
   },
   "plugins": [
+    {
+      "name": "seo-audit",
+      "source": "./",
+      "skills": [
+        "./skills/seo-audit"
+      ],
+      "strict": false,
+      "description": "Audit a page the way a search engine reads it, with findings ranked by what actually costs you rankings.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alisina Nawabi",
+        "url": "https://www.floh.solutions"
+      },
+      "homepage": "https://www.floh.solutions/skills/seo-audit",
+      "repository": "https://github.com/ASNNetworks/floh-skills",
+      "license": "MIT",
+      "category": "developer-tools",
+      "keywords": [
+        "seo",
+        "metadata",
+        "structured-data",
+        "indexering"
+      ]
+    },
+    {
+      "name": "document-extraction",
+      "source": "./",
+      "skills": [
+        "./skills/document-extraction"
+      ],
+      "strict": false,
+      "description": "Pull structured fields out of invoices, receipts and contracts, with a confidence score per field instead of a guess.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alisina Nawabi",
+        "url": "https://www.floh.solutions"
+      },
+      "homepage": "https://www.floh.solutions/skills/document-extraction",
+      "repository": "https://github.com/ASNNetworks/floh-skills",
+      "license": "MIT",
+      "category": "developer-tools",
+      "keywords": [
+        "facturen",
+        "ocr",
+        "boekhouding",
+        "pdf"
+      ]
+    },
+    {
+      "name": "brand-voice",
+      "source": "./",
+      "skills": [
+        "./skills/brand-voice"
+      ],
+      "strict": false,
+      "description": "Turn your writing voice into rules an agent applies and a checker enforces, instead of a style guide read once.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alisina Nawabi",
+        "url": "https://www.floh.solutions"
+      },
+      "homepage": "https://www.floh.solutions/skills/brand-voice",
+      "repository": "https://github.com/ASNNetworks/floh-skills",
+      "license": "MIT",
+      "category": "developer-tools",
+      "keywords": [
+        "copy",
+        "stijlgids",
+        "redactie",
+        "ci"
+      ]
+    },
+    {
+      "name": "supabase-migrations",
+      "source": "./",
+      "skills": [
+        "./skills/supabase-migrations"
+      ],
+      "strict": false,
+      "description": "The running order for Postgres migrations on self-hosted Supabase, including the step everyone forgets that fails silently.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alisina Nawabi",
+        "url": "https://www.floh.solutions"
+      },
+      "homepage": "https://www.floh.solutions/skills/supabase-migrations",
+      "repository": "https://github.com/ASNNetworks/floh-skills",
+      "license": "MIT",
+      "category": "developer-tools",
+      "keywords": [
+        "postgres",
+        "rls",
+        "postgrest",
+        "migraties"
+      ]
+    },
+    {
+      "name": "nextjs-conventions",
+      "source": "./",
+      "skills": [
+        "./skills/nextjs-conventions"
+      ],
+      "strict": false,
+      "description": "The App Router and Tailwind v4 rules that break quietly, as a checklist your agent applies while it writes.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alisina Nawabi",
+        "url": "https://www.floh.solutions"
+      },
+      "homepage": "https://www.floh.solutions/skills/nextjs-conventions",
+      "repository": "https://github.com/ASNNetworks/floh-skills",
+      "license": "MIT",
+      "category": "developer-tools",
+      "keywords": [
+        "next.js",
+        "react",
+        "tailwind",
+        "app-router"
+      ]
+    },
+    {
+      "name": "linkedin-carousel",
+      "source": "./",
+      "skills": [
+        "./skills/linkedin-carousel"
+      ],
+      "strict": false,
+      "description": "Turn an article into a LinkedIn carousel with a structure that works, rendered to the PDF format LinkedIn actually accepts.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alisina Nawabi",
+        "url": "https://www.floh.solutions"
+      },
+      "homepage": "https://www.floh.solutions/skills/linkedin-carousel",
+      "repository": "https://github.com/ASNNetworks/floh-skills",
+      "license": "MIT",
+      "category": "developer-tools",
+      "keywords": [
+        "linkedin",
+        "social",
+        "pdf",
+        "repurposing"
+      ]
+    },
     {
       "name": "skill-distribution",
       "source": "./",
@@ -15,22 +159,45 @@
         "./skills/skill-distribution"
       ],
       "strict": false,
-      "description": "Package, install and distribute Agent Skills across Claude Code, Codex and other agent clients.",
+      "description": "Get a skill onto someone else's machine: the per-client directories, plugin marketplaces, and the mistakes that produce no error at all.",
       "version": "1.0.0",
       "author": {
         "name": "Alisina Nawabi",
         "url": "https://www.floh.solutions"
       },
-      "homepage": "https://www.floh.solutions",
+      "homepage": "https://www.floh.solutions/skills/skill-distribution",
       "repository": "https://github.com/ASNNetworks/floh-skills",
       "license": "MIT",
       "category": "developer-tools",
       "keywords": [
-        "agent-skills",
-        "distribution",
+        "distributie",
+        "marketplace",
         "packaging",
-        "claude-code",
-        "codex"
+        "claude-code"
+      ]
+    },
+    {
+      "name": "image-gen",
+      "source": "./",
+      "skills": [
+        "./skills/image-gen"
+      ],
+      "strict": false,
+      "description": "Let an agent with no image tool generate images by driving Codex or Antigravity headlessly, then judge the result itself.",
+      "version": "1.1.0",
+      "author": {
+        "name": "Alisina Nawabi",
+        "url": "https://www.floh.solutions"
+      },
+      "homepage": "https://www.floh.solutions/skills/image-gen",
+      "repository": "https://github.com/ASNNetworks/floh-skills",
+      "license": "MIT",
+      "category": "developer-tools",
+      "keywords": [
+        "beeld",
+        "codex",
+        "antigravity",
+        "headless"
       ]
     }
   ]

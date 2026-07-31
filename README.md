@@ -13,10 +13,17 @@ until one is actually needed.
 
 | Skill | What it does |
 |-------|--------------|
-| [`skill-distribution`](skills/skill-distribution/) | Package, install and distribute Agent Skills across Claude Code, Codex and other clients. |
+| [`seo-audit`](skills/seo-audit/) | Audit a page the way a search engine reads it, with findings ranked by what actually costs you rankings. |
+| [`document-extraction`](skills/document-extraction/) | Pull structured fields out of invoices, receipts and contracts, with a confidence score per field instead of a guess. |
+| [`brand-voice`](skills/brand-voice/) | Turn your writing voice into rules an agent applies and a checker enforces, instead of a style guide read once. |
+| [`supabase-migrations`](skills/supabase-migrations/) | The running order for Postgres migrations on self-hosted Supabase, including the step everyone forgets that fails silently. |
+| [`nextjs-conventions`](skills/nextjs-conventions/) | The App Router and Tailwind v4 rules that break quietly, as a checklist your agent applies while it writes. |
+| [`linkedin-carousel`](skills/linkedin-carousel/) | Turn an article into a LinkedIn carousel with a structure that works, rendered to the PDF format LinkedIn actually accepts. |
+| [`skill-distribution`](skills/skill-distribution/) | Get a skill onto someone else's machine: the per-client directories, plugin marketplaces, and the mistakes that produce no error at all. |
+| [`image-gen`](skills/image-gen/) | Let an agent with no image tool generate images by driving Codex or Antigravity headlessly, then judge the result itself. |
 
-More skills are being written. This repository is the distribution point; the browsable catalogue
-with examples and demos will live on floh.solutions.
+This repository is the distribution point. The browsable catalogue, with a demo and the full
+source of each skill, lives at <https://www.floh.solutions/skills>.
 
 ## Install
 
@@ -24,7 +31,7 @@ with examples and demos will live on floh.solutions.
 
 ```
 /plugin marketplace add ASNNetworks/floh-skills
-/plugin install skill-distribution@floh-skills
+/plugin install <skill>@floh-skills
 ```
 
 Run `/reload-plugins` afterwards to make the skill available in the current session. Update later
@@ -34,7 +41,7 @@ with `/plugin marketplace update floh-skills`.
 
 ```bash
 git clone https://github.com/ASNNetworks/floh-skills.git /tmp/floh-skills
-cp -r /tmp/floh-skills/skills/skill-distribution ~/.claude/skills/
+cp -r /tmp/floh-skills/skills/<skill> ~/.claude/skills/
 ```
 
 For a project rather than your whole account, copy into `.claude/skills/` in the repository
@@ -45,11 +52,22 @@ instead and commit it.
 ```bash
 git clone https://github.com/ASNNetworks/floh-skills.git /tmp/floh-skills
 mkdir -p ~/.agents/skills
-cp -r /tmp/floh-skills/skills/skill-distribution ~/.agents/skills/
+cp -r /tmp/floh-skills/skills/<skill> ~/.agents/skills/
 ```
 
 Codex also scans `$REPO_ROOT/.agents/skills` and `/etc/codex/skills`, and ships a built-in
 `$skill-installer` you can point at this repository.
+
+### One folder, four clients
+
+`~/.agents/skills/` is read by **Codex, Cursor, Gemini CLI / Antigravity and OpenCode** alike.
+Unpacking a skill there once covers all four:
+
+```bash
+git clone https://github.com/ASNNetworks/floh-skills.git /tmp/floh-skills
+mkdir -p ~/.agents/skills
+cp -r /tmp/floh-skills/skills/<skill> ~/.agents/skills/
+```
 
 ### Other clients
 
