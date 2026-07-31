@@ -183,8 +183,8 @@
         "./skills/image-gen"
       ],
       "strict": false,
-      "description": "Let an agent with no image tool generate images by driving Codex or Antigravity headlessly, then judge the result itself.",
-      "version": "1.3.0",
+      "description": "Generate and edit images from inside your coding session by driving Codex or Antigravity headlessly, using your own project files as references. The agent then looks at the result and judges it itself.",
+      "version": "1.3.1",
       "author": {
         "name": "Alisina Nawabi",
         "url": "https://www.floh.solutions"
@@ -197,7 +197,8 @@
         "beeld",
         "codex",
         "antigravity",
-        "headless"
+        "headless",
+        "bewerken"
       ]
     }
   ]
