@@ -1,0 +1,37 @@
+{
+  "name": "floh-skills",
+  "owner": {
+    "name": "FLOH Solutions",
+    "url": "https://www.floh.solutions"
+  },
+  "metadata": {
+    "description": "Agent Skills by FLOH. Portable SKILL.md capabilities that work across Claude Code, Codex, Gemini CLI, Cursor and other skills-compatible agents."
+  },
+  "plugins": [
+    {
+      "name": "skill-distribution",
+      "source": "./",
+      "skills": [
+        "./skills/skill-distribution"
+      ],
+      "strict": false,
+      "description": "Package, install and distribute Agent Skills across Claude Code, Codex and other agent clients.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alisina Nawabi",
+        "url": "https://www.floh.solutions"
+      },
+      "homepage": "https://www.floh.solutions",
+      "repository": "https://github.com/ASNNetworks/floh-skills",
+      "license": "MIT",
+      "category": "developer-tools",
+      "keywords": [
+        "agent-skills",
+        "distribution",
+        "packaging",
+        "claude-code",
+        "codex"
+      ]
+    }
+  ]
+}

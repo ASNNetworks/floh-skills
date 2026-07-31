@@ -1,0 +1,22 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Checks marketplace.json against the skills on disk. Every failure it looks
+      # for is one that produces no error at install time, so without this a broken
+      # manifest ships and users just see a skill that never loads.
+      - run: node scripts/validate.mjs
