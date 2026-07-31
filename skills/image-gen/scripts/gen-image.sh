@@ -149,6 +149,26 @@ done
 BRIEF="$1"
 [ -r "$BRIEF" ] || { echo "brief file not readable: $BRIEF" >&2; exit 2; }
 
+# ---- first-run preflight ----------------------------------------------------
+# On a machine that has never run this skill, check the setup and say exactly what is
+# missing BEFORE burning two minutes of an agent's time on a run that cannot work.
+# preflight.sh caches its verdict against a fingerprint of the binaries and the agy
+# settings, so once it has passed the cost is a couple of stat calls per run, and it
+# re-checks by itself when anything relevant changes.
+#   exit 2 = no provider at all -> stop here, the guidance is already on stderr
+#   exit 1 = something is off  -> warn but continue; the run may still work
+if [ "${GEN_IMAGE_SKIP_PREFLIGHT:-0}" != "1" ]; then
+  # Parameter expansion rather than dirname: one less binary to depend on.
+  PREFLIGHT="${0%/*}/preflight.sh"
+  if [ -x "$PREFLIGHT" ]; then
+    "$PREFLIGHT" --quiet
+    case "$?" in
+      2) exit 127 ;;
+      1) echo "continuing despite the warnings above" >&2 ;;
+    esac
+  fi
+fi
+
 CODEX_BIN="$(command -v codex 2>/dev/null || true)"
 [ -x "${CODEX_BIN:-}" ] || { [ -x "$HOME/.npm-global/bin/codex" ] && CODEX_BIN="$HOME/.npm-global/bin/codex"; }
 AGY_BIN="$(command -v agy 2>/dev/null || true)"

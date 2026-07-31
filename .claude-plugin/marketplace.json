@@ -184,7 +184,7 @@
       ],
       "strict": false,
       "description": "Let an agent with no image tool generate images by driving Codex or Antigravity headlessly, then judge the result itself.",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "author": {
         "name": "Alisina Nawabi",
         "url": "https://www.floh.solutions"

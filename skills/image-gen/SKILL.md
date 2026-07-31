@@ -8,6 +8,38 @@ description: "Generate raster images by driving a local coding-agent CLI that ha
 Claude has no image-generation tool. Two locally installed agent CLIs do. This skill
 drives them headlessly so an image request costs one command, not an investigation.
 
+## First run on a new machine
+
+`gen-image.sh` runs `scripts/preflight.sh` before it does anything else, so a machine that
+cannot generate an image says so in a second rather than after a two-minute run that was
+never going to work.
+
+```bash
+scripts/preflight.sh            # human-readable
+scripts/preflight.sh --json     # for you to parse
+scripts/preflight.sh --force    # re-check after the user installs something
+```
+
+| Exit | Means | What you do |
+| --- | --- | --- |
+| 0 | at least one provider is installed and usable | proceed |
+| 1 | installed but something is off (not signed in, untrusted workspace, no python3) | relay the warning, then proceed; it may still work |
+| 2 | neither provider installed | **stop.** Give the user the install instructions it printed |
+
+On exit 2, do **not** fall back to an SVG or a CSS drawing. That is a different deliverable
+and the user did not ask for it. Say which providers you looked for and where.
+
+**How "first run" is detected.** State lives at `~/.cache/floh-image-gen/preflight.json`. No
+file means this skill has never run here, which is exactly when to check everything and walk
+the user through setup. When the file is there, preflight compares a fingerprint of the
+environment (each binary's path, size and mtime, plus the mtime of the Antigravity settings
+and of the Codex auth file) against the stored one. Unchanged means every probe is skipped,
+so the steady-state cost is a few `stat` calls. Changed means a re-check, because an
+upgrade, a reinstall or an edited settings file is precisely when a cached "it worked once"
+becomes a lie.
+
+Set `GEN_IMAGE_SKIP_PREFLIGHT=1` to bypass it, and `GEN_IMAGE_STATE_DIR` to move the state.
+
 ## Provider selection
 
 1. **The user named one — obey it.** "codex" / "chatgpt" / "openai" → `codex`.
