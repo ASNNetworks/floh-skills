@@ -2,7 +2,7 @@
 # Generate or edit an image by driving a local coding agent that has an image tool.
 #
 #   gen-image.sh [--provider codex|antigravity|auto] [--name <slug>] [--dest <path>]
-#                [--edit <image>] [--ref <image>]... <brief-file>
+#                [--edit <image>] [--ref <image>]... [--file <path>]... <brief-file>
 #
 # Providers:
 #   codex        OpenAI Codex CLI, built-in image_gen tool      -> PNG
@@ -16,6 +16,10 @@
 #                not a patch: ~99% of pixels move a little, ~6% move visibly.
 #   --ref IMG    supply IMG as a style/character reference for a fresh generation.
 #                Repeatable; 2-4 is the useful range. Combines with --edit.
+#   --file PATH  stage a PROJECT file the agent reads for ITSELF — a component, a
+#                token sheet, a copy deck. Repeatable. It never sees your repo: the
+#                file is COPIED into the workspace, so "these files and no others"
+#                is a property of what is there, not of a permission rule.
 #
 # Destination (unless --dest overrides):
 #   <repo-root>/claude-image-gen/<slug>-<provider>.png
@@ -25,7 +29,7 @@
 #
 # Never overwrites; versions to -v2, -v3. Converts format with sips when needed.
 #
-# --edit/--ref with antigravity need a read_file allow-rule covering the scratch dir
+# --edit/--ref/--file with antigravity need a read_file allow-rule for the scratch dir
 # (see preflight.sh); headless agy cannot prompt for it and the run dies mid-flight.
 
 set -euo pipefail
@@ -143,7 +147,7 @@ print("  pixelHeight: %d" % h)
 PY
 }
 
-PROVIDER="auto"; DEST=""; NAME=""; EDIT_SRC=""; REFS=()
+PROVIDER="auto"; DEST=""; NAME=""; EDIT_SRC=""; REFS=(); FILES=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --provider) PROVIDER="${2:-}"; shift 2 ;;
@@ -156,7 +160,9 @@ while [ $# -gt 0 ]; do
     --edit=*) EDIT_SRC="${1#*=}"; shift ;;
     --ref) REFS+=("${2:-}"); shift 2 ;;
     --ref=*) REFS+=("${1#*=}"); shift ;;
-    -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
+    --file) FILES+=("${2:-}"); shift 2 ;;
+    --file=*) FILES+=("${1#*=}"); shift ;;
+    -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) break ;;
   esac
@@ -172,6 +178,10 @@ if [ -n "$EDIT_SRC" ]; then
 fi
 for r in ${REFS[@]+"${REFS[@]}"}; do
   [ -r "$r" ] || { echo "--ref image not readable: $r" >&2; exit 2; }
+done
+for f in ${FILES[@]+"${FILES[@]}"}; do
+  [ -r "$f" ] || { echo "--file not readable: $f" >&2; exit 2; }
+  [ -f "$f" ] || { echo "--file is not a regular file: $f" >&2; exit 2; }
 done
 
 # ---- first-run preflight ----------------------------------------------------
@@ -292,9 +302,34 @@ if [ ${#REFS[@]} -gt 0 ]; then
   done
 fi
 
-# agy cannot prompt headless, so a missing read_file rule kills an edit/ref run at the
-# point the tool is called — minutes in, with nothing to show. Say so before spending that.
-if [ "$PROVIDER" = "antigravity" ] && { [ -n "$EDIT_SRC" ] || [ ${#REFS[@]} -gt 0 ]; }; then
+# Stage project files the agent reads for itself. Same containment rule as the images:
+# everything it may read is COPIED in, so "these files and no others" is a property of the
+# workspace rather than a permission rule that would have to be widened to your repo.
+FILE_BASES=(); FILE_ORIGINS=()
+if [ ${#FILES[@]} -gt 0 ]; then
+  mkdir -p "$WORK/context"
+  for f in "${FILES[@]}"; do
+    base="${f##*/}"
+    case "$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')" in
+      png|jpg|jpeg|webp|gif|heic)
+        echo "warning: --file $base is an image; --ref feeds it to the generator instead" >&2 ;;
+    esac
+    # Keep the original basename — it tells the agent what it is looking at — and only
+    # disambiguate on a real collision between two directories.
+    stem="${base%.*}"; ext=""
+    [ "$stem" != "$base" ] && ext=".${base##*.}"
+    cand="$base"; n=2
+    while [ -e "$WORK/context/$cand" ]; do cand="${stem}-${n}${ext}"; n=$((n+1)); done
+    cp "$f" "$WORK/context/$cand"
+    bytes="$(wc -c < "$WORK/context/$cand" | tr -d ' ')"
+    [ "$bytes" -gt 102400 ] && echo "warning: context/$cand is $((bytes/1024))KB; a file that big crowds out the brief" >&2
+    FILE_BASES+=("context/$cand"); FILE_ORIGINS+=("$f")
+  done
+fi
+
+# agy cannot prompt headless, so a missing read_file rule kills an edit/ref/file run at
+# the point the tool is called — minutes in, with nothing to show. Say so before that.
+if [ "$PROVIDER" = "antigravity" ] && { [ -n "$EDIT_SRC" ] || [ ${#REFS[@]} -gt 0 ] || [ ${#FILES[@]} -gt 0 ]; }; then
   python3 - "$HOME/.gemini/antigravity-cli/settings.json" "$WORK" <<'PY' >&2 || true
 import json, os, sys
 settings, work = sys.argv[1], sys.argv[2]
@@ -321,6 +356,7 @@ echo "provider:  $PROVIDER"
 echo "workspace: $WORK"
 [ -n "$EDIT_SRC" ] && echo "edit of:   $EDIT_SRC"
 [ ${#REFS[@]} -gt 0 ] && echo "refs:      ${#REFS[@]}"
+[ ${#FILES[@]} -gt 0 ] && echo "context:   ${#FILES[@]} file(s) -> $WORK/context"
 echo "running (codex ~2min, antigravity ~20s)..." >&2
 
 # Written AFTER staging, so the fallback image search can never mistake an input image
@@ -332,6 +368,15 @@ if [ "$PROVIDER" = "codex" ]; then
   {
     cat "$BRIEF"
     printf '\n\n---\n'
+    if [ ${#FILE_BASES[@]} -gt 0 ]; then
+      printf 'Project files have been copied into ./context/ in your working directory. READ EVERY ONE of them before you draw — they are the ground truth for structure, naming, wording and colour, and the brief above assumes you have:\n'
+      i=0
+      for b in "${FILE_BASES[@]}"; do
+        printf '  ./%s   (from %s)\n' "$b" "${FILE_ORIGINS[$i]}"
+        i=$((i+1))
+      done
+      printf 'They are reference material: do not modify them, and do not go looking outside your working directory — nothing else was shared with you.\n'
+    fi
     if [ ${#REF_BASES[@]} -gt 0 ]; then
       printf 'Reference images are in your working directory. Load EVERY one with your view_image tool BEFORE drawing, so they are in your conversation context:\n'
       for b in "${REF_BASES[@]}"; do printf '  ./%s\n' "$b"; done
@@ -367,6 +412,15 @@ else
   {
     cat "$BRIEF"
     printf '\n\n---\n'
+    if [ ${#FILE_BASES[@]} -gt 0 ]; then
+      printf 'Project files have been copied into %s/context/. Read EVERY one with your read_file tool before generating — they are the ground truth for structure, naming, wording and colour, and the brief above assumes you have:\n' "$WORK"
+      i=0
+      for b in "${FILE_BASES[@]}"; do
+        printf '  %s/%s   (from %s)\n' "$WORK" "$b" "${FILE_ORIGINS[$i]}"
+        i=$((i+1))
+      done
+      printf 'They are reference material only. Nothing outside that directory was shared with you.\n'
+    fi
     printf 'Use your generate_image tool to generate this as a real raster image.\n'
     if [ -n "$EDIT_BASE" ] || [ ${#REF_BASES[@]} -gt 0 ]; then
       # agy takes input images as a direct visual input to the generator via ImagePaths,

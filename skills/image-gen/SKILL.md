@@ -136,7 +136,7 @@ and the model will not draw the same image twice.
 ```bash
 ~/.claude/skills/image-gen/scripts/gen-image.sh \
   [--provider codex|antigravity] [--name <slug>] [--dest <path>] \
-  [--edit <image>] [--ref <image>]... <brief-file>
+  [--edit <image>] [--ref <image>]... [--file <path>]... <brief-file>
 ```
 
 `--edit` changes one thing about an existing image and carries the rest over. `--ref` supplies
@@ -145,12 +145,18 @@ the agent's workspace, flattening alpha onto white on the way in — hand a mode
 cutout and it may composite it on black and faithfully match the silhouette. In edit mode the
 default slug becomes `<source-name>-edit`.
 
+`--file` stages a **project** file the agent reads for itself — a component, a token sheet, a
+copy deck. Repeatable. See *Generating from your project* below for when to reach for it.
+
 ```bash
 # one more pose for an existing set — prefer this over describing the character
 gen-image.sh --edit avatar-thumbs-up.png --name avatar-pointing brief.txt
 
 # fresh image, but in the house style
 gen-image.sh --ref master.png --ref hands.png --name avatar-waving brief.txt
+
+# a mockup that has to agree with the product's real palette and vocabulary
+gen-image.sh --file src/theme/tokens.ts --file docs/brand.md --name dashboard-mockup brief.txt
 ```
 
 Defaults to `auto` (Codex, else Antigravity) and to the destination above. The script picks
@@ -266,6 +272,43 @@ will help.
 ```bash
 ( cd /private/tmp/work && ~/.local/bin/agy --print-timeout 300s -p "$(cat brief.txt)" )
 ```
+
+## Generating from your project
+
+The agent does **not** see your repository. It runs in a throwaway workspace with its own
+working directory, and the only things in there are the ones this script puts there. That is
+deliberate: an image agent that can wander a codebase spends turns navigating instead of
+drawing, and on a shared box it is reading things nobody scoped.
+
+So project context arrives through exactly three channels, and choosing the right one is most
+of the work:
+
+| Channel | Carries | Use it for |
+|---|---|---|
+| the brief | prose you wrote | intent, mood, framing, what to avoid |
+| `--ref` / `--edit` | an image, as a **visual input to the generator** | style, character, house look |
+| `--file` | a file the agent **reads for itself** | the ground truth it must not get wrong |
+
+**Reach for `--file` when the truth is structured and exact.** Paraphrasing a token sheet into
+a brief loses the hex values; paraphrasing a component loses the hierarchy; paraphrasing a copy
+deck loses the wording. Hand over the file and none of that is lost in the retelling.
+
+**Name the files; do not hand over the repo.** By the time you are generating an image you have
+already read the code, so picking three to six files is sharper than any exploration the
+sub-agent could do — and cheaper, since it pays no tokens to find them and cannot wander into
+something irrelevant on the way.
+
+Mechanically, each file is **copied** into `context/` inside the workspace under its own
+basename (colliding names get `-2`, `-3`), and the brief lists every one with the absolute path
+it came from, so the agent knows what it is looking at. Copying rather than granting access is
+what makes "these files and no others" a property of the workspace instead of a permission rule
+somebody has to widen to your project. Codex reads them with its own tools under
+`workspace-write`; Antigravity uses `read_file`, covered by the **same allow-rule the reference
+images already need** — one rule, because both live in the scratch dir.
+
+It is not a substitute for `--ref`. A reference image is a visual input to the generator itself;
+a staged file is text the agent reasons over before it writes its prompt. An image passed to
+`--file` gets a warning saying so.
 
 ## Writing the brief
 
