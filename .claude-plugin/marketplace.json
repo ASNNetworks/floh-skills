@@ -209,7 +209,7 @@
       ],
       "strict": false,
       "description": "Drive an Azure DevOps board from the shell with the pharos CLI: the whole verb list up front, a work item's full context in one call, the wiki and its comments, and what the CLI does NOT do so a session stops hunting for it.",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "Alisina Nawabi",
         "url": "https://www.floh.solutions"

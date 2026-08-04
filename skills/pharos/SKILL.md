@@ -1,6 +1,6 @@
 ---
 name: pharos
-description: "Use whenever Azure DevOps (ADO) work is involved — reading or updating a work item, ticket, task, bug, story or epic; anything with a board, backlog, sprint or iteration; \"what is assigned to me\", \"my tasks\", \"what is open\"; reading or writing a project wiki page; commenting on a task or a wiki page; linking a plan to an epic; or when the user names a work item by number (\"pick up 4821\", \"what's on 210\"). Also use when deciding between the Azure DevOps MCP server and the `pharos` CLI, or when an Azure DevOps call fails and you need to know whether to retry it."
+description: "Use for AZURE DEVOPS work specifically — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you in Azure DevOps; reading or writing an ADO project wiki page and its comments; linking a plan to an epic; choosing between the Azure DevOps MCP server and the `pharos` CLI; and whether a failed Azure DevOps call is worth retrying. NOT for other trackers — the Argus board, GitHub issues, Jira, Linear — where \"task\", \"todo\" and \"board\" mean something else entirely."
 license: MIT
 ---
 
