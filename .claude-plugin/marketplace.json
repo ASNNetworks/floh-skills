@@ -200,6 +200,31 @@
         "headless",
         "bewerken"
       ]
+    },
+    {
+      "name": "pharos",
+      "source": "./",
+      "skills": [
+        "./skills/pharos"
+      ],
+      "strict": false,
+      "description": "Drive an Azure DevOps board from the shell with the pharos CLI: gather a work item's full context in one call, work the wiki and its comments, and know which failures are worth retrying.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alisina Nawabi",
+        "url": "https://www.floh.solutions"
+      },
+      "homepage": "https://www.floh.solutions/skills/pharos",
+      "repository": "https://github.com/ASNNetworks/floh-skills",
+      "license": "MIT",
+      "category": "developer-tools",
+      "keywords": [
+        "azure-devops",
+        "work-items",
+        "wiki",
+        "cli",
+        "sprint"
+      ]
     }
   ]
 }
