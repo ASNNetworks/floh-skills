@@ -31,6 +31,9 @@ delete <id> --yes              → Recycle Bin (no permanent delete, on purpose)
 restore <id>                   bring one back
 deleted                        what is in the Recycle Bin, with names
 wiki list | tree | read <path> | write <path> | delete <path>
+wiki move <path> <new path>    move a page; sub-pages come with it
+wiki rename <path> <new name>  the same call, leaf only. BOTH need --yes
+wiki duplicate <path> [to]     a verb Azure DevOps lacks. "<path> - Copy N"
 comment list | add | edit | delete   <target> is a work item id OR a wiki path
 comment react | unreact | reactors   like dislike heart hooray smile confused
 hooks list | check | create | repoint | delete    service hooks for realtime
@@ -238,6 +241,12 @@ This is a rule about writes, not about reads. A read `pharos` does not offer —
 reach for `query --wiql`, or the REST API — is fine, costs nothing to get wrong,
 and is better than refusing to answer. A write it does not offer is a gap worth
 reporting, not routing around: the guards are the reason the tool exists.
+
+**Moving or renaming a page changes what it IS.** A wiki page has no id — the
+path is its identity — so anything pointing at the old path stops resolving,
+including artifact links from work items, and nothing reports it. That is why
+both verbs need `--yes` while `write` does not, and why the refusal names what
+it is about to break. Sub-pages move with their parent.
 
 ## Three things no tool can fix
 
