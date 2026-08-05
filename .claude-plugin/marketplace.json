@@ -208,8 +208,8 @@
         "./skills/pharos"
       ],
       "strict": false,
-      "description": "Drive an Azure DevOps board from the shell with the pharos CLI: the whole verb list up front, a work item's full context in one call, the wiki and its comments, and what the CLI does NOT do so a session stops hunting for it.",
-      "version": "1.1.1",
+      "description": "Drive an Azure DevOps board from the shell with the pharos CLI: which work items are yours, in this sprint or still open; a work item full context in one call; the wiki and its comments; and the whole verb list up front so a session stops hunting.",
+      "version": "1.2.0",
       "author": {
         "name": "Alisina Nawabi",
         "url": "https://www.floh.solutions"
@@ -223,7 +223,8 @@
         "work-items",
         "wiki",
         "cli",
-        "sprint"
+        "sprint",
+        "wiql"
       ]
     }
   ]

@@ -13,6 +13,8 @@ environment variable rather than a browser login.
 out** — that costs several calls and this section is the same information.
 
 ```
+query                          WHICH work items — assigned to you, in a sprint,
+                               of a type, still open. Hydrated items, not ids.
 task <id>                      one work item, whole: fields, comments,
                                attachments, relations WITH titles, and the
                                content + discussion of every linked wiki page
@@ -31,30 +33,43 @@ Text input: `--text` / `--file` / `--stdin`. Global: `--pretty` for a human,
 setup. Do not check them before working; a missing one announces itself as
 `"kind": "config"` on exit 2, which is the only time it matters.
 
-## What `pharos` does NOT do — read this before you go looking
+## Finding the work: `pharos query`
 
-**There is no query, list or search verb.** `task` takes one id. Nothing here
-answers "what is assigned to me", "what is in this sprint" or "what is open" —
-and the CLI will not grow the verb by being asked twice.
-
-That is the single most common opening question, so here is the answer rather
-than a prohibition. **WIQL, read-only, with the token already in your
-environment:**
+**Do not reach for `curl` and the WIQL endpoint.** This skill used to hand you a
+recipe for exactly that, because there was no query verb. There is one now, and
+it does the part the recipe could not: WIQL returns **ids only**, so the recipe
+gave you sixteen bare numbers and a call per item to make them mean anything.
 
 ```bash
-curl -sS -u ":$ADO_PAT" -H 'Content-Type: application/json' \
-  "https://dev.azure.com/$ADO_ORG/$ADO_PROJECT/_apis/wit/wiql?api-version=7.1" \
-  -d '{"query":"SELECT [System.Id] FROM WorkItems WHERE [System.AssignedTo] = @Me AND [System.State] NOT IN (\"Done\",\"Closed\",\"Removed\") ORDER BY [System.ChangedDate] DESC"}'
+pharos query --mine                       # assigned to you, still open
+pharos query --sprint "Sprint 1"          # --sprint current for @currentIteration
+pharos query --type Epic --state Doing    # both repeatable
+pharos query --assignee "ada@contoso.com"
+pharos query --tag api --all              # --all includes finished work
+pharos query --wiql "SELECT [System.Id] FROM WorkItems WHERE …"   # escape hatch
 ```
 
-It returns **ids only**. Then `pharos task <id>` for the few you actually need —
-not for all of them, which is a call per item for context nobody asked for.
+Flags AND together. Output is hydrated items — id, type, title, state, assignee,
+iteration, tags, priority, changed — so `--mine` is one command, not a query
+followed by a fetch per result. Follow up with `pharos task <id>` only for the
+few you are actually going to work on.
 
-Two things to say out loud when you use it, because both change how the answer
-should be read: **which states you treated as terminal** (projects rename them),
-and that `@Me` resolves to whoever owns `ADO_PAT`.
+**Read the `openness` field before you report a count.** "12 open" is
+meaningless until you know what was counted as finished, and Azure DevOps lets a
+process template rename every state. `query` reads the project's own state
+categories and tells you which states it treated as terminal; if it could not
+read them it says so and falls back to guessing, and that is your cue to pass
+`--state` explicitly. `assignedTo` names who `@Me` actually resolved to — a
+shared or service token makes "assigned to me" quietly mean somebody else.
 
-Also absent, so you can stop looking: creating or updating a work item's fields
+Do NOT write `[System.State] NOT IN GROUP 'Completed'` if you reach for `--wiql`.
+It parses, returns 200, and matches **everything** — `IN GROUP` covers work item
+TYPE categories only, and an unknown group resolves to the empty set with no
+error. Measured, 2026-08-05.
+
+## What `pharos` does NOT do — read this before you go looking
+
+Absent, so you can stop looking: creating or updating a work item's fields
 (`plan` creates trees; the MCP server updates fields), pull requests, code
 search, builds, pipelines.
 
@@ -62,13 +77,13 @@ search, builds, pipelines.
 
 They overlap only where both exist. **Check once** whether the MCP is connected
 — if no `mcp__ado__*` tools are available in the session, it is not, and the
-rest of this table collapses to "use `pharos` or use WIQL above".
+rest of this table collapses to "use `pharos`".
 
 | | |
 |---|---|
 | **Only `pharos`** | wiki page comments (the MCP has no tool for these at all), deleting a comment, reactions, deleting a wiki page, service hooks, and `pharos task <id>` for gathering context |
-| **Only the MCP** | querying and searching work items, updating fields and state, code, pull requests, builds |
-| **Either** | reading a work item, creating one, adding a comment, reading a wiki page |
+| **Only the MCP** | free-text SEARCH, updating fields and state, code, pull requests, builds |
+| **Either** | reading a work item, creating one, adding a comment, reading a wiki page, and **querying** — `pharos query` states which states it counted as finished, which the MCP does not |
 
 ## Start every task with one command
 
@@ -132,9 +147,9 @@ So a **failing** `pharos` command means the request was genuinely wrong or the
 API genuinely refused. Read the error; do not reach for `curl`.
 
 This is a rule about writes, not about reads. A read `pharos` does not offer —
-WIQL above — is fine, costs nothing to get wrong, and is better than refusing to
-answer. A write it does not offer is a gap worth reporting, not routing around:
-the guards are the reason the tool exists.
+reach for `query --wiql`, or the REST API — is fine, costs nothing to get wrong,
+and is better than refusing to answer. A write it does not offer is a gap worth
+reporting, not routing around: the guards are the reason the tool exists.
 
 ## Three things no tool can fix
 
