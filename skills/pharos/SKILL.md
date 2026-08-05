@@ -27,7 +27,8 @@ link <id> --parent <id>        relate two items. Also --child --related
 unlink <id> --parent <id>      --predecessor --successor --duplicate
 attach <id> <file>             put a file on a work item
 download <id-or-url>           read one back. --out <path> or it writes nothing
-delete <id> --yes              → Recycle Bin.  restore <id> brings it back
+delete <id> --yes              → Recycle Bin (no permanent delete, on purpose)
+restore <id>                   bring one back
 deleted                        what is in the Recycle Bin, with names
 wiki list | tree | read <path> | write <path> | delete <path>
 comment list | add | edit | delete   <target> is a work item id OR a wiki path
@@ -110,9 +111,12 @@ revision it read. If the relation is not there you get exit 3 — that means
 nothing happened, not that the call failed.
 
 `delete` moves to the **Recycle Bin** and needs `--yes`; the refusal quotes the
-title first. `restore <id>` brings it back and needs no flag. `--destroy` is
-permanent and is gated separately from `--yes`, so the flag you pass everywhere
-else cannot reach it.
+title first. `restore <id>` brings it back and needs no flag.
+
+**There is no permanent delete here, deliberately.** It is the only irreversible
+verb Azure DevOps has, and `--yes` is a flag you have learned to pass. The web
+UI owns it. If somebody genuinely needs to purge, send them there rather than
+looking for a flag.
 
 ## Do not guess a state name — ask
 
@@ -121,9 +125,14 @@ pharos types                 # every type, its states, and which mean "finished"
 pharos types --type Task
 ```
 
-`pharos update 225 --state Doing` fails if that work item type has no `Doing`,
-and Azure DevOps lets a process template rename every state. **One read beats a
-guess and a 400.** The categories are shown as well as the names because "which
+**`update` now refuses a state the item's type does not have, before writing,
+with the valid ones attached** — so you rarely need to run this first. Run it
+when you want to see the shape, or when composing a `--wiql` filter.
+
+**States belong to a TYPE, not to the project.** A state that exists elsewhere
+is still not one this item can take: `In Progress` is real on a Test Suite and
+invalid on a Task, and checking the project as a whole is the same guess one
+layer down. The categories are shown as well as the names because "which
 states exist" and "which mean finished" are different questions — `Inactive` is
 finished on a Test Plan and appears in nobody's hard-coded Done/Closed/Removed
 list.
@@ -177,6 +186,16 @@ reasoned from confidently.
 Success is JSON on stdout; failure is JSON on stderr with a non-zero exit. An
 empty array with exit 0 is a query that matched nothing — a different fact from
 a failure.
+
+**Read `advice` when it is there.** Azure DevOps answers a licence problem with
+`TF401289: The current user does not have permission to create tag definitions`,
+which is accurate and tells you nothing to do. Where the code is recognised the
+error carries an `advice` field saying what it actually means here — including
+the cases that read as one thing and are another: a failed tag on a create means
+**the work item exists and only the tag is missing**, and a refused delete is
+usually the account's ACCESS LEVEL rather than any permission, because a
+Stakeholder cannot delete however the permissions are set. `credentialIsFine:
+true` means stop re-checking the token.
 
 | exit | meaning | what to do |
 |---|---|---|
