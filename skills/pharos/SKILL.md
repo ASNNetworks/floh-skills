@@ -1,6 +1,6 @@
 ---
 name: pharos
-description: "Use for AZURE DEVOPS work specifically — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you in Azure DevOps; reading or writing an ADO project wiki page and its comments; linking a plan to an epic; choosing between the Azure DevOps MCP server and the `pharos` CLI; and whether a failed Azure DevOps call is worth retrying. NOT for other trackers — the Argus board, GitHub issues, Jira, Linear — where \"task\", \"todo\" and \"board\" mean something else entirely."
+description: "Use for AZURE DEVOPS work specifically — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you in Azure DevOps; reading or writing an ADO project wiki page and its comments; linking a plan to an epic; attaching a file to a work item; and whether a failed Azure DevOps call is worth retrying. NOT for other trackers — the Argus board, GitHub issues, Jira, Linear — where \"task\", \"todo\" and \"board\" mean something else entirely."
 license: MIT
 ---
 
@@ -18,6 +18,9 @@ query                          WHICH work items — assigned to you, in a sprint
 task <id>                      one work item, whole: fields, comments,
                                attachments, relations WITH titles, and the
                                content + discussion of every linked wiki page
+update <id>                    change a field: --state --priority --assignee
+                               --title, or --field Name=value for anything else
+attach <id> <file>             put a file on a work item
 wiki list | tree | read <path> | write <path> | delete <path>
 comment list | add | edit | delete   <target> is a work item id OR a wiki path
 comment react | unreact | reactors   like dislike heart hooray smile confused
@@ -67,23 +70,40 @@ It parses, returns 200, and matches **everything** — `IN GROUP` covers work it
 TYPE categories only, and an unknown group resolves to the empty set with no
 error. Measured, 2026-08-05.
 
+## Changing a work item: `update` and `attach`
+
+```bash
+pharos update 225 --state Doing              # move the state when the work moves
+pharos update 225 --priority 1 --assignee "ada@contoso.com"
+pharos update 225 --field Microsoft.VSTS.Scheduling.RemainingWork=3
+pharos attach 225 ./bestsellers.xlsx --comment "The numbers"
+```
+
+`update` **reads the item and applies the change under a `test` op on `/rev`**,
+so somebody who wrote between your read and your write gets you a `conflict`
+rather than losing their edit. Setting a value it already has writes nothing and
+says so — a pointless PATCH still bumps `System.Rev` and invalidates every other
+cached revision on the item. `--dry-run` shows the before → after and writes
+nothing. There is no `--yes`: a field edit is an ordinary edit and Azure DevOps
+keeps every revision.
+
+`attach` uploads the bytes and then links them as an `AttachedFile` relation —
+two calls, one command. Attachments are **immutable**: attaching the same file
+twice makes two of them, and there is no replace and no versioning.
+
 ## What `pharos` does NOT do — read this before you go looking
 
-Absent, so you can stop looking: creating or updating a work item's fields
-(`plan` creates trees; the MCP server updates fields), pull requests, code
-search, builds, pipelines.
+- **Free-text and code search.** Nothing here covers it. For work items,
+  `pharos query --wiql "… WHERE [System.Title] CONTAINS 'thing'"` gets close;
+  for code there is no substitute short of the REST API.
+- **Iterations, capacity, backlogs, team and identity lookup.**
+- Pull requests, builds, pipelines.
 
-## Which tool: `pharos` or the Azure DevOps MCP server
-
-They overlap only where both exist. **Check once** whether the MCP is connected
-— if no `mcp__ado__*` tools are available in the session, it is not, and the
-rest of this table collapses to "use `pharos`".
-
-| | |
-|---|---|
-| **Only `pharos`** | wiki page comments (the MCP has no tool for these at all), deleting a comment, reactions, deleting a wiki page, service hooks, and `pharos task <id>` for gathering context |
-| **Only the MCP** | free-text SEARCH, updating fields and state, code, pull requests, builds |
-| **Either** | reading a work item, creating one, adding a comment, reading a wiki page, and **querying** — `pharos query` states which states it counted as finished, which the MCP does not |
+**There is no Azure DevOps MCP server here any more, and that is deliberate.**
+It authenticated through the Azure CLI, so it opened a browser mid-task — which
+makes a headless session stop and wait for a human who is not watching. Do not
+suggest installing it back to cover the gaps above; say the gap out loud instead,
+so it gets closed here where the guards are.
 
 ## Start every task with one command
 
