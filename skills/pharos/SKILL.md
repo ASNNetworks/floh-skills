@@ -20,10 +20,15 @@ query                          WHICH work items — assigned to you, in a sprint
 task <id>                      one work item, whole: fields, comments,
                                attachments, relations WITH titles, and the
                                content + discussion of every linked wiki page
+create <type> --title "…"      one work item. --parent goes in the SAME patch
 update <id>                    change a field: --state --priority --assignee
                                --title, or --field Name=value for anything else
+link <id> --parent <id>        relate two items. Also --child --related
+unlink <id> --parent <id>      --predecessor --successor --duplicate
 attach <id> <file>             put a file on a work item
 download <id-or-url>           read one back. --out <path> or it writes nothing
+delete <id> --yes              → Recycle Bin.  restore <id> brings it back
+deleted                        what is in the Recycle Bin, with names
 wiki list | tree | read <path> | write <path> | delete <path>
 comment list | add | edit | delete   <target> is a work item id OR a wiki path
 comment react | unreact | reactors   like dislike heart hooray smile confused
@@ -73,7 +78,7 @@ It parses, returns 200, and matches **everything** — `IN GROUP` covers work it
 TYPE categories only, and an unknown group resolves to the empty set with no
 error. Measured, 2026-08-05.
 
-## Changing a work item: `update` and `attach`
+## Changing a work item
 
 ```bash
 pharos update 225 --state Doing              # move the state when the work moves
@@ -93,6 +98,21 @@ keeps every revision.
 `attach` uploads the bytes and then links them as an `AttachedFile` relation —
 two calls, one command. Attachments are **immutable**: attaching the same file
 twice makes two of them, and there is no replace and no versioning.
+
+`create` puts `--parent` in the same patch as the fields, so a child is never
+briefly an orphan, and it takes the same flag names as `update`.
+
+**`unlink` refuses rather than guessing, and that is worth knowing before you
+see it.** Azure DevOps removes a relation by its POSITION in the array, so an
+index from a stale read cuts a different link and the request still succeeds.
+`unlink` finds the relation by identity and removes it under a `test` op on the
+revision it read. If the relation is not there you get exit 3 — that means
+nothing happened, not that the call failed.
+
+`delete` moves to the **Recycle Bin** and needs `--yes`; the refusal quotes the
+title first. `restore <id>` brings it back and needs no flag. `--destroy` is
+permanent and is gated separately from `--yes`, so the flag you pass everywhere
+else cannot reach it.
 
 ## Do not guess a state name — ask
 
@@ -119,8 +139,6 @@ misconfigured — which is exactly when you need it.
 - **Free-text and code search.** Nothing here covers it. For work items,
   `pharos query --wiql "… WHERE [System.Title] CONTAINS 'thing'"` gets close;
   for code there is no substitute short of the REST API.
-- **Creating a work item** (`plan` builds a tree from a file), **linking or
-  unlinking** two of them, **deleting** one or reaching the recycle bin.
 - **Iterations, areas, capacity, backlogs, teams.**
 - Pull requests, builds, pipelines.
 
