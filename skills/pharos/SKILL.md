@@ -13,6 +13,8 @@ environment variable rather than a browser login.
 out** — that costs several calls and this section is the same information.
 
 ```
+whoami                         who ADO_PAT belongs to. @Me resolves to this
+types                          what --state and --type will ACCEPT, per type
 query                          WHICH work items — assigned to you, in a sprint,
                                of a type, still open. Hydrated items, not ids.
 task <id>                      one work item, whole: fields, comments,
@@ -21,6 +23,7 @@ task <id>                      one work item, whole: fields, comments,
 update <id>                    change a field: --state --priority --assignee
                                --title, or --field Name=value for anything else
 attach <id> <file>             put a file on a work item
+download <id-or-url>           read one back. --out <path> or it writes nothing
 wiki list | tree | read <path> | write <path> | delete <path>
 comment list | add | edit | delete   <target> is a work item id OR a wiki path
 comment react | unreact | reactors   like dislike heart hooray smile confused
@@ -91,19 +94,47 @@ keeps every revision.
 two calls, one command. Attachments are **immutable**: attaching the same file
 twice makes two of them, and there is no replace and no versioning.
 
+## Do not guess a state name — ask
+
+```bash
+pharos types                 # every type, its states, and which mean "finished"
+pharos types --type Task
+```
+
+`pharos update 225 --state Doing` fails if that work item type has no `Doing`,
+and Azure DevOps lets a process template rename every state. **One read beats a
+guess and a 400.** The categories are shown as well as the names because "which
+states exist" and "which mean finished" are different questions — `Inactive` is
+finished on a Test Plan and appears in nobody's hard-coded Done/Closed/Removed
+list.
+
+`pharos whoami` is the other one worth reaching for early: it names the identity
+behind `ADO_PAT`, which is who `@Me` resolves to and who every write is
+attributed to. A shared or service token quietly makes "assigned to me" mean
+somebody else. It is org-scoped, so it still answers when the project is
+misconfigured — which is exactly when you need it.
+
 ## What `pharos` does NOT do — read this before you go looking
 
 - **Free-text and code search.** Nothing here covers it. For work items,
   `pharos query --wiql "… WHERE [System.Title] CONTAINS 'thing'"` gets close;
   for code there is no substitute short of the REST API.
-- **Iterations, capacity, backlogs, team and identity lookup.**
+- **Creating a work item** (`plan` builds a tree from a file), **linking or
+  unlinking** two of them, **deleting** one or reaching the recycle bin.
+- **Iterations, areas, capacity, backlogs, teams.**
 - Pull requests, builds, pipelines.
 
 **There is no Azure DevOps MCP server here any more, and that is deliberate.**
 It authenticated through the Azure CLI, so it opened a browser mid-task — which
-makes a headless session stop and wait for a human who is not watching. Do not
-suggest installing it back to cover the gaps above; say the gap out loud instead,
-so it gets closed here where the guards are.
+makes a headless session stop and wait for a human who is not watching.
+
+For a **read** this tool does not offer, the REST API is fine and costs nothing
+to get wrong. For a **write** it does not offer, say the gap out loud rather than
+routing around it: five things here exist in no other Azure DevOps tool at all —
+wiki page comments and reactions, attachment upload, editing or deleting a work
+item comment, service hooks, and applying a change under a `test` op on `/rev`
+so a teammate who wrote first cannot be silently overwritten. Those are what the
+guards are, and they are the reason to come back here rather than hand-roll.
 
 ## Start every task with one command
 

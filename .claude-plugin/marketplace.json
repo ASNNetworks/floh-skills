@@ -209,7 +209,7 @@
       ],
       "strict": false,
       "description": "Drive an Azure DevOps board from the shell with the pharos CLI: which work items are yours or still open, a work item full context in one call, changing fields safely, attaching files, and the wiki with its comments. No MCP server and no browser login.",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "author": {
         "name": "Alisina Nawabi",
         "url": "https://www.floh.solutions"
