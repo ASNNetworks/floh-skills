@@ -1,7 +1,7 @@
 ---
 name: pharos
-description: "Use for AZURE DEVOPS work specifically — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you in Azure DevOps; reading or writing an ADO project wiki page and its comments; linking a plan to an epic; attaching a file to a work item; and whether a failed Azure DevOps call is worth retrying. NOT for other trackers — the Argus board, GitHub issues, Jira, Linear — where \"task\", \"todo\" and \"board\" mean something else entirely."
-license: MIT
+description: "Use for AZURE DEVOPS work specifically — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you in Azure DevOps; reading or writing an ADO project wiki page and its comments; linking a plan to an epic; attaching a file to a work item or taking one off; putting an inline image into a description, a comment, a wiki page or a wiki comment; @mentioning somebody so they are actually notified; importing Markdown, Word or PDF files as wiki pages; and whether a failed Azure DevOps call is worth retrying. NOT for other trackers — the Argus board, GitHub issues, Jira, Linear — where \"task\", \"todo\" and \"board\" mean something else entirely."
+license: Proprietary
 ---
 
 # Working Azure DevOps with `pharos`
@@ -25,8 +25,12 @@ update <id>                    change a field: --state --priority --assignee
                                --title, or --field Name=value for anything else
 link <id> --parent <id>        relate two items. Also --child --related
 unlink <id> --parent <id>      --predecessor --successor --duplicate
-attach <id> <file>             put a file on a work item
+attach <id> <file>             put a FILE on a work item (Attachments list)
+detach <id> <url-or-guid>      take one off. --yes
 download <id-or-url>           read one back. --out <path> or it writes nothing
+image <file>                   upload a PICTURE for use inside text. Prints the
+                               markdown to paste. NOT the same as attach
+people [query]                 who can be @mentioned, with the @<guid> form
 delete <id> --yes              → Recycle Bin (no permanent delete, on purpose)
 restore <id>                   bring one back
 deleted                        what is in the Recycle Bin, with names
@@ -34,6 +38,10 @@ wiki list | tree | read <path> | write <path> | delete <path>
 wiki move <path> <new path>    move a page; sub-pages come with it
 wiki rename <path> <new name>  the same call, leaf only. BOTH need --yes
 wiki duplicate <path> [to]     a verb Azure DevOps lacks. "<path> - Copy N"
+wiki image <file>              a picture for a PAGE or page comment. Different
+                               endpoint from `image`, and the name is unique-d
+wiki import <file...>          .md .txt .docx .pdf .rtf .html -> pages
+                               --under <path> --as <name>
 comment list | add | edit | delete   <target> is a work item id OR a wiki path
 comment react | unreact | reactors   like dislike heart hooray smile confused
 hooks list | check | create | repoint | delete    service hooks for realtime
@@ -101,7 +109,10 @@ keeps every revision.
 
 `attach` uploads the bytes and then links them as an `AttachedFile` relation —
 two calls, one command. Attachments are **immutable**: attaching the same file
-twice makes two of them, and there is no replace and no versioning.
+twice makes two of them, and there is no replace and no versioning. `detach`
+takes one off; it needs `--yes`, finds the attachment by identity rather than by
+position, and leaves the bytes in Azure DevOps so re-attaching the url puts it
+back.
 
 `create` puts `--parent` in the same patch as the fields, so a child is never
 briefly an orphan, and it takes the same flag names as `update`.
@@ -120,6 +131,99 @@ title first. `restore <id>` brings it back and needs no flag.
 verb Azure DevOps has, and `--yes` is a flag you have learned to pass. The web
 UI owns it. If somebody genuinely needs to purge, send them there rather than
 looking for a flag.
+
+## Pictures in text, and files beside it
+
+**These are two different things and picking the wrong one is the mistake worth
+avoiding.**
+
+```bash
+pharos attach 225 ./bestsellers.xlsx    # a FILE, in the Attachments list
+pharos image ./screenshot.png           # a PICTURE, to put inside the text
+```
+
+An **attachment** creates an `AttachedFile` relation and appears in the work
+item's Attachments list. An **inline image** creates no relation at all —
+measured on #333, two screenshots pasted into a description gave `relations: 0`
+and `attachments: []`. It is an `![](…)` in the field text and nothing else,
+which is why the Attachments list is right to show nothing for it.
+
+So `image` prints a markdown line and leaves the writing to you:
+
+```bash
+pharos image ./chart.png --pretty
+# ![chart](https://dev.azure.com/…/wit/attachments/<guid>?fileName=chart.png)
+
+pharos update 225 --field System.Description="$(cat <<'EOF'
+Revenue is up. See the chart:
+
+![chart](https://dev.azure.com/…/wit/attachments/<guid>?fileName=chart.png)
+EOF
+)"
+```
+
+**A wiki picture is a different endpoint and needs `wiki image`.** A wiki is a
+git repository, so an attachment there is a FILE and its NAME is its identity:
+upload a second `image.png` and it lands on the first, and every page pointing
+at `/.attachments/image.png` silently changes picture. `wiki image` makes the
+name unique before sending and prints a repo-relative link:
+
+```bash
+pharos wiki image ./diagram.png --pretty
+# ![diagram](/.attachments/diagram-1786046773042.png)
+```
+
+Use that path, **not** an absolute url — a page linking to a `wit/attachments`
+url renders for anyone with a session and breaks for everybody else. The same
+markdown works in a page and in a page comment.
+
+## Mentioning somebody
+
+**A mention is `@<guid>` and nothing else notifies.** `@Ada Lovelace` written
+into a comment is plain text: it reads like a mention to every human who sees
+it, links to nobody, and sends no notification. Nothing errors, so this fails
+silently and stays failed.
+
+```bash
+pharos people                     # everyone the board knows, with the form
+pharos people ada                 # filter by name or email
+pharos comment add 225 --text "Ready for review @<0f45a818-878d-6d7a-ba8c-1f5568a89ed4>"
+```
+
+The names come from the board's own work items — everyone assigned, creating or
+changing anything — rather than from an identity endpoint, because those live on
+another host and want scopes a work-scoped PAT does not have. So somebody who
+has never touched an item here will not be listed; the guid out of any Azure
+DevOps url works just as well.
+
+## Turning documents into wiki pages
+
+```bash
+pharos wiki import ./notes.md ./spec.docx --under "/Guides"
+pharos wiki import ./report.pdf --as "Q3 Report"
+```
+
+`.md` and `.txt` are copied **verbatim** — they are already the target format,
+and anything done to them would be reformatting a document somebody wrote
+deliberately. `.docx`, `.pdf`, `.rtf` and `.html` are converted by
+`pharos-convert`, which is the **same converter the macOS app uses**, so both
+produce the same page from the same file. If it is not on PATH, markdown and
+text still import and everything else is refused by name with the reason.
+
+Three rules, because each of them is a way to lose work:
+
+- **A name collision SKIPS and says so.** A page write with an empty version is
+  a *create*, so writing over an existing page is silent data loss.
+- **Names are settled against the batch as well as the wiki**, so importing
+  `Notes.docx` beside `Notes.pdf` gives two pages rather than one written twice.
+  A name you give with `--as` is never renamed — it is an instruction, so it is
+  allowed to collide and skip.
+- **An empty document is refused.** A scanned PDF carries no extractable text at
+  all and PDFKit returns an empty string with no error; an empty page would look
+  like a successful import until somebody opened it.
+
+Exit 3 when **nothing** landed. A partial batch exits 0 and names what skipped —
+retrying it blindly would collide with the pages it just made.
 
 ## Do not guess a state name — ask
 
@@ -160,10 +264,13 @@ makes a headless session stop and wait for a human who is not watching.
 
 For a **read** this tool does not offer, the REST API is fine and costs nothing
 to get wrong. For a **write** it does not offer, say the gap out loud rather than
-routing around it: five things here exist in no other Azure DevOps tool at all —
-wiki page comments and reactions, attachment upload, editing or deleting a work
-item comment, service hooks, and applying a change under a `test` op on `/rev`
-so a teammate who wrote first cannot be silently overwritten. Those are what the
+routing around it: several things here exist in no other Azure DevOps tool at
+all — wiki page comments and reactions, attachment upload AND removal, inline
+images for a work item field or a wiki page, mentioning somebody in a form that
+actually notifies, importing a Word document or a PDF as a page, editing or
+deleting a work item comment, service hooks, and applying a change under a
+`test` op on `/rev` so a teammate who wrote first cannot be silently
+overwritten. Those are what the
 guards are, and they are the reason to come back here rather than hand-roll.
 
 ## Start every task with one command
