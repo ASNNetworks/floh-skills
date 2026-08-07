@@ -28,8 +28,10 @@ update <id>                    change a field: --state --priority --assignee
                                --title, or --field Name=value for anything else
 link <id> --parent <id>        relate two items. Also --child --related
 unlink <id> --parent <id>      --predecessor --successor --duplicate
-link <id> --wiki-page <path>   link a WIKI PAGE to a work item. This is what
-                               makes a plan findable by `task`
+link <id> --wiki-page <path>   link a WIKI PAGE to a work item — the item side
+wiki links <path>              which work items link a page (ADO has no API)
+wiki link <path> --item <id>   the WIKI side; --item repeatable
+wiki unlink <path> --item <id>
 history <id>                   what CHANGED, field by field, who and when
 iterations | areas             the sprints with their dates, and the areas
 links                          every relation type this ORG has, and which
@@ -336,25 +338,61 @@ takes the number: do not quote it on the command line.
 — `Activity` is on `Task` and on neither `Epic` nor `Issue` in the Basic
 process, so there is no project-wide answer to "which fields are there".
 
-## Linking a wiki page to a work item
+## Wiki pages and work items: one relation, two directions
 
-**This is what makes a plan findable.** `pharos task` reads linked wiki pages
-and their discussion — that is the whole point of it — and the link is what puts
-them there:
+**This is what makes a plan findable.** `pharos task` reads linked wiki pages and
+their discussion — that is the whole point of it — and the link is what puts them
+there.
 
 ```bash
-pharos wiki write "/Plans/Sprint 3" --stdin < plan.md
+# from the ITEM: one task, the documents it needs
 pharos link 39 --wiki-page "/Plans/Sprint 3"
-pharos unlink 39 --wiki-page "/Plans/Sprint 3"      # by identity, guarded
+pharos unlink 39 --wiki-page "/Plans/Sprint 3"
+
+# from the PAGE: one spec, the ten tasks that implement it
+pharos wiki link   "/Plans/Sprint 3" --item 40 --item 41 --item 42
+pharos wiki unlink "/Plans/Sprint 3" --item 40
+
+# and the question Azure DevOps has no API for
+pharos wiki links "/Plans/Sprint 3"
 ```
+
+**A wiki page stores nothing about work items.** Measured: a page resource is
+`path`, `order`, `gitItemPath`, `subPages`, `url`, `remoteUrl`, `id` — no link
+field at all. The relation lives on the WORK ITEM, and Azure DevOps' own "Link
+work items" panel on a page is a reverse lookup. That has two consequences worth
+knowing before you plan a call:
+
+- **item → its pages is FREE.** They are already in the item's own relations, so
+  `pharos task <id>` returns them with no extra request. There is no such thing
+  as a reverse lookup on a work item, and nothing scans the wiki.
+- **page → its items costs one call.** `wiki links` is the only direction that
+  has to ask.
+
+Either way the other side sees it: link ten items from the page, and each of the
+ten now returns the page from `task`.
 
 `--wiki-page`, **not** `--wiki`: `--wiki <name>` is the global flag naming which
 wiki to work in, and using it here means "the wiki called /Plans/Sprint 3".
 
-A wiki artifact link is `vstfs:///Wiki/WikiPage/<project>%2F<wiki>%2F<path>` —
-the page's PATH is its identity, with no id anywhere. So **moving or renaming a
-page silently breaks every link to it**, which is why `wiki move` and `wiki
-rename` need `--yes` and `wiki write` does not.
+`wiki link` writes one relation per item and reports one result per item — a
+partial failure is a real outcome when ten items are named, and collapsing it
+into one ok/failed would be a lie about the other nine.
+
+### The URI is the identity, and it has a trap in its history
+
+`vstfs:///Wiki/WikiPage/<projectId>%2F<wikiId>%2F<path>`, the path carrying **no
+leading slash**. Two things follow:
+
+- **Moving or renaming a page silently breaks every link to it**, because the
+  path was the identity. That is why `wiki move` and `wiki rename` need `--yes`
+  and `wiki write` does not.
+- Before pharos-cli 0.16.0 this tool wrote `%2F%2Fpath` — one extra encoded
+  slash. Those links are real, Azure DevOps stored them, and `task` reads them
+  back fine, but the wiki's own panel could never find them because its reverse
+  lookup keys on the canonical form. If a page shows a link here and not on the
+  website, that is why. `wiki links` and `unlink` both ask about **both** shapes,
+  so old links still resolve and can still be removed.
 
 ## What `pharos` does NOT do — read this before you go looking
 
