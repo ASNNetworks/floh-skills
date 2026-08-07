@@ -20,6 +20,9 @@ query                          WHICH work items — assigned to you, in a sprint
 task <id>                      one work item, whole: fields, comments,
                                attachments, relations WITH titles, and the
                                content + discussion of every linked wiki page
+                               --children  an EPIC and everything under it, in
+                               ONE call. --depth <n> for deeper (max 5)
+                               --compact   flatten identities, drop board keys
 create <type> --title "…"      one work item. --parent goes in the SAME patch
 update <id>                    change a field: --state --priority --assignee
                                --title, or --field Name=value for anything else
@@ -276,7 +279,8 @@ guards are, and they are the reason to come back here rather than hand-roll.
 ## Start every task with one command
 
 ```bash
-pharos task <id>
+pharos task <id>                       # a leaf
+pharos task <id> --children --compact  # an EPIC and everything under it
 ```
 
 One call: the item, its comments, its attachments, its relations **with their
@@ -290,6 +294,78 @@ description. A task worked without it is a task worked without the plan.
 Anything that could not be fetched appears in `problems[]`. **If that array is
 not empty, say so before acting** — a context with an invisible hole in it gets
 reasoned from confidently.
+
+### What it actually returns
+
+**Read this before writing a parser.** The shapes below are the CLI's, not the
+Azure DevOps API's, and they differ in exactly the places you would guess wrong:
+
+```jsonc
+{
+  "id": 40,
+  "fields": {                    // the raw ADO field bag
+    "System.Title": "…",
+    "System.State": "To Do",
+    "System.Description": "plain text, real newlines — NOT html",
+    "System.AssignedTo": { "displayName": "…", "uniqueName": "…" }
+  },
+  "comments": [
+    { "id": 1741895,
+      "text": "I have updated the description",
+      "createdBy": "André Kwakernaat",          // a STRING, already flattened
+      "createdDate": "2026-08-05T10:15:43.167Z" }
+  ],
+  "attachments": [],
+  "related": [                                   // titles and states ALREADY resolved
+    { "id": 46, "rel": "System.LinkTypes.Hierarchy-Forward",
+      "title": "Skill: …", "state": "To Do" }
+  ],
+  "wikiPages": [],
+  "problems": [],
+  "children": []                                 // only with --children/--depth
+}
+```
+
+Three things that trip up a parser written against the REST API:
+
+- **`comments[].createdBy` is a string**, not an identity object. There is no
+  `.displayName` on it.
+- **Description and comment text are plain text**, already converted. Do not
+  strip tags; there are none.
+- **A field is ABSENT when unset, not empty.** `fields["System.Description"]` is
+  simply missing on an item nobody has written one for — which is a *finding*
+  worth reporting, not a crash. Measured: seven of eight children of one epic.
+
+`--pretty` renders all of the above as readable markdown and drops the identity
+noise. It is not only "for a human" — for reading a single item it is usually
+the better format for you too.
+
+### Starting from an EPIC
+
+An epic is not a big task, and the loop below is written for a leaf. Handed a
+parent, the first question is **which children are actually specified**:
+
+```bash
+pharos task 39 --children --compact
+```
+
+One call instead of one per child — measured on a real epic, nine calls and
+~42 KB became one call and ~22 KB. Then, **before proposing any work**, report
+the split:
+
+> #40 has a complete 5,694-character spec. #41–#47 have no description at all.
+> Seven of eight are placeholders.
+
+That is the single most useful thing to say about a parent item, and it is the
+thing an agent is most likely to skip — the titles read like a plan, so an
+implementation gets inferred from them and nobody notices it was invented.
+
+`--depth <n>` walks further (max 5). A child that cannot be read becomes a
+`problems[]` entry rather than failing the whole call, so a partial tree still
+tells you what is missing.
+
+`--compact` flattens identities to display names and drops the `WEF_…` board
+extension keys. Measured at ~24% of an item's bytes and nothing reads them.
 
 ## Reading the outcome
 
