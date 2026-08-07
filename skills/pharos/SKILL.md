@@ -43,7 +43,9 @@ image <file>                   upload a PICTURE for use inside text. Prints the
 people [query]                 who can be @mentioned, with the @<guid> form
 delete <id> --yes              → Recycle Bin (no permanent delete, on purpose)
 restore <id>                   bring one back
-deleted                        what is in the Recycle Bin, with names
+deleted                        what is in the Recycle Bin, with names.
+                               --top <n> — it returns 50 by default and reports
+                               the true total as "count"
 wiki list | tree | read <path> | write <path> | delete <path>
 wiki move <path> <new path>    move a page; sub-pages come with it
 wiki rename <path> <new name>  the same call, leaf only. BOTH need --yes
@@ -54,7 +56,9 @@ wiki import <file...>          .md .txt .docx .pdf .rtf .html -> pages
                                --under <path> --as <name>
 comment list | add | edit | delete   <target> is a work item id OR a wiki path
 comment react | unreact | reactors   like dislike heart hooray smile confused
-hooks list | check | create | repoint | delete    service hooks for realtime
+hooks list | check | create | repoint | delete    service hooks for realtime.
+                               `check` needs --hub <url>; `list` shows the URL
+                               already in use
 plan <file>                    an implementation plan → a work item tree
 setup                          org, project, token → keychain + shell profile
 ```
@@ -94,6 +98,19 @@ categories and tells you which states it treated as terminal; if it could not
 read them it says so and falls back to guessing, and that is your cue to pass
 `--state` explicitly. `assignedTo` names who `@Me` actually resolved to — a
 shared or service token makes "assigned to me" quietly mean somebody else.
+
+`--all` composes with every other filter, so `--mine --all` is how you tell
+*nothing is assigned to you* from *nothing open*. A bare `pharos query --all` is
+legal and returns the whole project.
+
+`--sprint` takes either the bare name or the fieldPath and normalises between
+them — the fieldPath rule is about `System.IterationPath` as a *field value*. But
+a named sprint matches with `UNDER` (sub-iterations included) while `--sprint
+current` matches with `=` (exact), so they are not the same query.
+
+`--wiql` also accepts a `FROM WorkItemLinks … MODE (MustContain)` query and
+hydrates the ids the same way, which is how you find every item carrying a given
+relation type in one call.
 
 Do NOT write `[System.State] NOT IN GROUP 'Completed'` if you reach for `--wiql`.
 It parses, returns 200, and matches **everything** — `IN GROUP` covers work item
@@ -273,12 +290,25 @@ pharos links                 # every relation type, and which --flag reaches it
 pharos fields --type Task --constrained   # what Priority and Activity accept
 ```
 
+**Which sprint is current comes from the TEAM, not from the dates.**
+`iterations` reports a top-level `current` (the field path of the team's current
+iteration) and marks that node `current: true`. It asks team settings, because
+an iteration is current because a team says so — `startDate`/`finishDate` are
+routinely null and deriving it from them answers "no current sprint" on most
+boards. `query --sprint current` resolves the same iteration.
+
 **`iterations` prints TWO paths and only one of them works as a field value.**
 `path` is the classification node — `\Tibata\Iteration\Sprint 1`. `fieldPath`
 is what `System.IterationPath` and `--sprint` take — `Tibata\Sprint 1`, with no
 `Iteration` segment. Handing the node path to the field is a 400 that reads as
 though the sprint does not exist. A sprint with `startDate: null` is normal —
 most orgs never set them.
+
+**`history` returns raw field values.** The top-level `by` is a flattened
+display-name string, but `changes[].from`/`to` are the field values themselves —
+an identity field gives you the whole identity object, not a name. `--compact`
+is a `task` flag and does not exist here, and `WEF_…` board keys are not
+filtered, so expect them on the creation revision.
 
 **`history` reads `/updates`, which is the diff.** `/revisions` is snapshots you
 would have to diff yourself. Bookkeeping fields that change on every revision
@@ -290,6 +320,17 @@ not a change anybody made.
 `Affects`, `TestedBy`, the `Remote.*` family and `Duplicate-Reverse` have no
 flag. The output marks which ones do, so "does this link type exist" and "can I
 make it from here" are one answer.
+
+There is **no `--rel <referenceName>` escape hatch** — the six flags are the
+whole write surface. That has one consequence worth knowing before you promise
+it: `--duplicate` reaches `Duplicate-Forward` only, so if the item you are
+standing on shows the relation as **Duplicate Of** (`Duplicate-Reverse`), unlink
+it from the *other* item instead.
+
+**`--constrained` narrows `fields` to those with an allowed-values list** — the
+ones you can get wrong. Without it you get every field on the type. Note that
+Priority's `allowedValues` come back as STRINGS (`"1"`…`"4"`) while `--priority`
+takes the number: do not quote it on the command line.
 
 **`fields` needs `--type`.** Allowed values belong to the TYPE, not the project
 — `Activity` is on `Task` and on neither `Epic` nor `Issue` in the Basic
@@ -322,6 +363,8 @@ rename` need `--yes` and `wiki write` does not.
   for code there is no substitute short of the REST API.
 - **Capacity, backlogs, teams.** Iterations and areas ARE covered — see
   `iterations` / `areas` above — but team capacity and backlog ordering are not.
+- **Wiki content search.** `wiki tree` then `wiki read` is the only way through;
+  there is no grep across pages.
 - Pull requests, builds, pipelines.
 
 **There is no Azure DevOps MCP server here any more, and that is deliberate.**
@@ -398,6 +441,11 @@ Three things that trip up a parser written against the REST API:
 - **A field is ABSENT when unset, not empty.** `fields["System.Description"]` is
   simply missing on an item nobody has written one for — which is a *finding*
   worth reporting, not a crash. Measured: seven of eight children of one epic.
+- **A child is a placeholder when the description is absent AND `comments`,
+  `attachments` and `wikiPages` are all empty.** Check all four: a spec is as
+  often a comment or a linked page as a description.
+- **`--pretty` always prints a Problems section**, saying `none` when there is
+  nothing wrong — so the check above can be made from either format.
 
 `--pretty` renders all of the above as readable markdown and drops the identity
 noise. It is not only "for a human" — for reading a single item it is usually
