@@ -28,6 +28,13 @@ update <id>                    change a field: --state --priority --assignee
                                --title, or --field Name=value for anything else
 link <id> --parent <id>        relate two items. Also --child --related
 unlink <id> --parent <id>      --predecessor --successor --duplicate
+link <id> --wiki-page <path>   link a WIKI PAGE to a work item. This is what
+                               makes a plan findable by `task`
+history <id>                   what CHANGED, field by field, who and when
+iterations | areas             the sprints with their dates, and the areas
+links                          every relation type this ORG has, and which
+                               --flag reaches it (six of ~eighteen)
+fields [--type T]              what a field will ACCEPT — allowed values
 attach <id> <file>             put a FILE on a work item (Attachments list)
 detach <id> <url-or-guid>      take one off. --yes
 download <id-or-url>           read one back. --out <path> or it writes nothing
@@ -253,12 +260,68 @@ attributed to. A shared or service token quietly makes "assigned to me" mean
 somebody else. It is org-scoped, so it still answers when the project is
 misconfigured — which is exactly when you need it.
 
+## Ask, do not guess — the five discovery verbs
+
+Every one of these replaced a guess, and a guess that silently succeeds against
+the wrong value is worse than one that fails:
+
+```bash
+pharos history 39            # what changed on it, field by field, who and when
+pharos iterations            # the sprints, with start/finish dates
+pharos areas                 # the area tree
+pharos links                 # every relation type, and which --flag reaches it
+pharos fields --type Task --constrained   # what Priority and Activity accept
+```
+
+**`iterations` prints TWO paths and only one of them works as a field value.**
+`path` is the classification node — `\Tibata\Iteration\Sprint 1`. `fieldPath`
+is what `System.IterationPath` and `--sprint` take — `Tibata\Sprint 1`, with no
+`Iteration` segment. Handing the node path to the field is a 400 that reads as
+though the sprint does not exist. A sprint with `startDate: null` is normal —
+most orgs never set them.
+
+**`history` reads `/updates`, which is the diff.** `/revisions` is snapshots you
+would have to diff yourself. Bookkeeping fields that change on every revision
+(`System.Rev`, the dates, the watermark) are filtered out unless you pass
+`--all`; a revision that changed only those is dropped entirely, because it is
+not a change anybody made.
+
+**`links` exists because `link` names six kinds and an org has about eighteen.**
+`Affects`, `TestedBy`, the `Remote.*` family and `Duplicate-Reverse` have no
+flag. The output marks which ones do, so "does this link type exist" and "can I
+make it from here" are one answer.
+
+**`fields` needs `--type`.** Allowed values belong to the TYPE, not the project
+— `Activity` is on `Task` and on neither `Epic` nor `Issue` in the Basic
+process, so there is no project-wide answer to "which fields are there".
+
+## Linking a wiki page to a work item
+
+**This is what makes a plan findable.** `pharos task` reads linked wiki pages
+and their discussion — that is the whole point of it — and the link is what puts
+them there:
+
+```bash
+pharos wiki write "/Plans/Sprint 3" --stdin < plan.md
+pharos link 39 --wiki-page "/Plans/Sprint 3"
+pharos unlink 39 --wiki-page "/Plans/Sprint 3"      # by identity, guarded
+```
+
+`--wiki-page`, **not** `--wiki`: `--wiki <name>` is the global flag naming which
+wiki to work in, and using it here means "the wiki called /Plans/Sprint 3".
+
+A wiki artifact link is `vstfs:///Wiki/WikiPage/<project>%2F<wiki>%2F<path>` —
+the page's PATH is its identity, with no id anywhere. So **moving or renaming a
+page silently breaks every link to it**, which is why `wiki move` and `wiki
+rename` need `--yes` and `wiki write` does not.
+
 ## What `pharos` does NOT do — read this before you go looking
 
 - **Free-text and code search.** Nothing here covers it. For work items,
   `pharos query --wiql "… WHERE [System.Title] CONTAINS 'thing'"` gets close;
   for code there is no substitute short of the REST API.
-- **Iterations, areas, capacity, backlogs, teams.**
+- **Capacity, backlogs, teams.** Iterations and areas ARE covered — see
+  `iterations` / `areas` above — but team capacity and backlog ordering are not.
 - Pull requests, builds, pipelines.
 
 **There is no Azure DevOps MCP server here any more, and that is deliberate.**
