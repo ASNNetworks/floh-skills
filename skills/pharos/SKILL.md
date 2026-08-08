@@ -66,6 +66,8 @@ hooks list | check | create | repoint | delete    service hooks for realtime.
                                already in use
 plan <file>                    an implementation plan → a work item tree
 setup                          org, project, token → keychain + shell profile
+                               --install ask|all|a,b  offer the optional
+                               capabilities (LibreOffice, poppler, converter)
 doctor                         what is installed on THIS machine, what is
                                missing, and what each missing thing costs
 ```
@@ -83,6 +85,11 @@ commands further down name them with confidence they have not earned on yours.
 it resolved, what is missing, and what each missing thing actually costs. It is
 read-only, offline, and works before anything is configured — so it is also the
 right first move when something behaves oddly.
+
+`pharos setup --install ask` then offers to install them, driving Homebrew, apt
+or winget rather than vendoring anything. **Nothing installs without that flag**
+— `--install all` for a fresh machine, `--install libreoffice,poppler` to
+provision without a terminal.
 
 ## Finding the work: `pharos query`
 
