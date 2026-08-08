@@ -1,6 +1,6 @@
 ---
 name: pharos
-description: "Use for AZURE DEVOPS work specifically — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you in Azure DevOps; reading or writing an ADO project wiki page and its comments; linking a plan to an epic; attaching a file to a work item or taking one off; putting an inline image into a description, a comment, a wiki page or a wiki comment; @mentioning somebody so they are actually notified; importing Markdown, Word or PDF files as wiki pages; and whether a failed Azure DevOps call is worth retrying. NOT for other trackers — the Argus board, GitHub issues, Jira, Linear — where \"task\", \"todo\" and \"board\" mean something else entirely."
+description: "Use for AZURE DEVOPS work — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you in Azure DevOps; reading or writing an ADO project wiki page and its comments; linking a plan to an epic; attaching a file to a work item or taking one off; inline images in a description, comment or wiki page; @mentioning somebody so they are actually notified; importing Markdown, Word or PDF files as wiki pages; and whether a failed ADO call is worth retrying. ALSO the GITHUB ISSUE ↔ work item EDGE: adopting an issue as a work item linked at both ends, bulk-adopting a repo, one reply reaching the reporter and the board at once, where they have drifted, and closing both ends together. NOT a GitHub CLI: listing, viewing or commenting on an issue is `gh`'s job. NOT for other trackers — the Argus board, Jira or Linear."
 license: Proprietary
 ---
 
@@ -61,19 +61,39 @@ wiki import <file...>          .md .txt .docx .pdf .rtf .html -> pages. A
                                --under <path> --as <name>
 comment list | add | edit | delete   <target> is a work item id OR a wiki path
 comment react | unreact | reactors   like dislike heart hooray smile confused
+issue adopt <owner/name#45>    a GitHub ISSUE becomes a work item, with BOTH
+                               ends of the link written. --type --title --parent
+issue link <owner/name#45> <id>   join an existing pair — or finish a join that
+                               half-happened. Only the missing half is written
+issue say <owner/name#45>      ONE message, TWO audiences: the whole of it to
+                               the reporter on GitHub, a summary and that
+                               comment's URL to the board. --summary
+issue trail <id|owner/name#45> the whole trail from EITHER end, with the
+                               evidence for each half. Read-only
+issue drift                    where the two platforms DISAGREE — the report no
+                               other tool can produce. --repo --limit --wiql
+issue backfill <owner/name>    bulk adopt every issue the board does not link
+                               yet. Needs --yes. --limit --state --label
+issue close <id|owner/name#45> close BOTH ends, then RE-READ both to say what
+                               actually moved. --to --reason --all
 hooks list | check | create | repoint | delete    service hooks for realtime.
                                `check` needs --hub <url>; `list` shows the URL
                                already in use
 plan <file>                    an implementation plan → a work item tree
 setup                          org, project, token → keychain + shell profile
                                --install ask|all|a,b  offer the optional
-                               capabilities (LibreOffice, poppler, converter)
+                               capabilities (LibreOffice, poppler, converter,
+                               the GitHub CLI)
+                               --repo owner/name --gh-account <login>  bind a
+                               repository to the GitHub account that reaches
+                               it. BOTH or NEITHER — `issue` needs this first
 doctor                         what is installed on THIS machine, what is
                                missing, and what each missing thing costs
 ```
 
 Text input: `--text` / `--file` / `--stdin`. Global: `--pretty` for a human,
-`--yes` for destructive verbs, `--dry-run` to preview.
+`--yes` for destructive verbs, `--dry-run` to preview, `--max-writes <n>` to
+change the per-invocation write cap (default 20; `0` is read-only).
 
 **`ADO_ORG`, `ADO_PROJECT` and `ADO_PAT` are already in the environment** after
 setup. Do not check them before working; a missing one announces itself as
@@ -83,8 +103,10 @@ setup. Do not check them before working; a missing one announces itself as
 commands further down name them with confidence they have not earned on yours.
 `pharos doctor` answers that in one call: what is present, its version and where
 it resolved, what is missing, and what each missing thing actually costs. It is
-read-only, offline, and works before anything is configured — so it is also the
-right first move when something behaves oddly.
+read-only and works before anything is configured — so it is also the right
+first move when something behaves oddly. Offline too, with one exception it
+names: `gh auth status` validates every token against github.com and there is
+no flag that stops it, so that probe runs only when `gh` is installed.
 
 `pharos setup --install ask` then offers to install them, driving Homebrew, apt
 or winget rather than vendoring anything. **Nothing installs without that flag**
@@ -596,6 +618,217 @@ leading slash**. Two things follow:
   website, that is why. `wiki links` and `unlink` both ask about **both** shapes,
   so old links still resolve and can still be removed.
 
+## GitHub issues: the join, and only the join
+
+**These verbs are newer than the CLI on most machines. Check before you promise
+one.** `pharos issue` shipped *after* **0.23.0**, so if `pharos --version` prints
+0.23.0 or lower it is not there and every verb below is an unknown command —
+`npm i -g @floh-solutions/pharos-cli@latest` is the fix. This skill and the CLI
+update by different routes and drift apart in both directions; `pharos doctor`
+prints both versions.
+
+**This is not a GitHub CLI and must not become one.** Listing, viewing and
+plainly commenting on an issue is `gh`'s job and `gh` is better at it; closing
+one *end* is `gh issue close`. Pharos owns the one thing `gh` cannot see: which
+work item tracks this issue, written so it survives in both databases.
+
+Azure DevOps has its own GitHub integration and **the link it makes carries
+nothing** — title, body, comments, labels and state stay on their own island,
+and the transition only ever fires from a commit or a PR merge, never from
+closing an issue. That gap is the whole reason these verbs exist.
+
+```bash
+pharos issue adopt contoso/widgets#45 --parent 39   # an issue → a work item, both ends
+pharos issue link  contoso/widgets#45 4821          # join a pair that already exists
+pharos issue trail 4821                             # …or trail contoso/widgets#45
+pharos issue say   contoso/widgets#45 --file reply.md
+pharos issue drift                                  # where the two disagree
+pharos issue backfill contoso/widgets --limit 25 --yes
+pharos issue close 4821 --text "Shipped in 1.4.0."
+```
+
+### Bind the repository first, or none of this runs
+
+```bash
+pharos setup --repo contoso/widgets --gh-account alisina-tibata
+```
+
+**Both flags or neither**, and there is deliberately **no fallback to whichever
+account `gh` has active**: two accounts can each see a repository of the same
+name, so the wrong one answers **200** for a different repository — a wrong
+answer rather than an error.
+
+An unbound repository is `"kind": "config"` on exit 2, naming
+`~/.config/pharos/repos.json` — never a guess — **and it lists the repositories
+that ARE bound**, so a typo is visible without reading the file. That check runs
+before everything else here, so it is the first thing to fix. `gh` itself is
+optional: without it every `issue` verb is refused by name with the reason and
+the Azure DevOps verbs are untouched. `pharos doctor` reports both.
+
+A failure that came from GitHub says **`"platform": "github"`**, because these
+verbs touch two platforms in one call and which one refused is the first thing
+to know. Its absence means Azure DevOps or this tool, as everywhere else.
+
+### `adopt` is safe to re-run. `say` is NOT. Do not generalise from one.
+
+**Adopting the same issue twice never creates a second work item.** What it
+does instead depends on the state the pair is in, and the exit code tells you
+which:
+
+| exit **0**, `created: false` | the issue carries a marker. You get the work item it names and nothing is written — the state you asked for already holds |
+| exit **3**, `halfLinked: true` | a work item already links this issue and the issue says nothing about it. Refused, carrying `recover` — the link wants **finishing**, not repeating |
+| exit **3**, `workItemIds` with two entries | two work items claim one issue. Refused, both named, no `recover`: picking one would be inventing an answer |
+
+Azure DevOps is written **first**, because the work item id does not exist until
+the create lands, so the one failure `adopt` can leave is always the same shape:
+the board end written, the GitHub end not.
+
+```jsonc
+{ "error": { "createdWorkItem": 4821, "halfLinked": true, "wrote": ["hyperlink"],
+             "recover": "pharos issue link contoso/widgets#45 4821" } }
+```
+
+**Read more than `kind` on that error**: a work item now exists, and reading
+only the kind loses its id. `recover` is the literal command that finishes the
+job, and nothing needs undoing first.
+
+**Re-running `adopt` there is safe but it is not the repair** — it refuses,
+because the row above is exactly the state it detects, and the refusal hands
+back the same `recover` string. Take it either from the failure or from the
+refusal; they are the same command. `link` writes only the half that is missing,
+which makes it both the fix here and the ordinary way to join a pair that
+already exists. `pharos issue drift` finds this state later if nobody acted on
+it at the time — it reports it as `one-sided`, carrying the same repair.
+
+Every `adopt` reports `boardCheck`. `{"ran": true}` means the board was searched
+for a work item that already tracks this issue; `{"ran": false}` carries the
+reason it could not be, and then a half-link made on **another machine** would
+not have been seen — `pharos issue drift --repo <owner/name>` asks the same
+question deliberately.
+
+`say` is the opposite, and that is the trap. **GitHub is written first there**,
+because the board's comment carries the GitHub comment's URL and that does not
+exist until the POST returns. So a failure on the board half leaves a **public
+comment already posted**, and re-running posts a second one:
+
+```jsonc
+{ "error": { "halfSaid": true, "wrote": ["github-comment"],
+             "github": { "commentUrl": "https://github.com/…#issuecomment-950" },
+             "recover": "pharos comment add 4821 --stdin", "adoComment": "…" } }
+```
+
+Feed `adoComment` into `recover`. Do not re-run `say`.
+
+### `say` — one message, two audiences
+
+|  | GitHub | Azure DevOps |
+|---|---|---|
+| who reads it | the reporter, who has **no** Azure DevOps account and never will | the team |
+| what they get | the full explanation | a summary, and the URL of the comment carrying the rest |
+
+**The asymmetry is the verb.** The same words in both places is `gh issue
+comment` followed by `pharos comment add`, and neither of those knows the other
+happened. Without `--summary` the board gets the first paragraph cut to 200
+characters — a guess, and allowed to be one *only* because the comment's URL
+travels with it. GitHub is the record of what was said; the board never is.
+
+**Never pass a message that already carries a `<!-- pharos:v1 … -->` trailer.**
+It is refused (exit 3) before any call, on `say` and on `close`'s closing note
+alike. That trailer means the text is Pharos's own output coming back round — a
+comment you read and re-posted — and it is how a fan-out starts summarising its
+own summaries. Every comment these verbs post carries one on the way out; you
+never write one in.
+
+`say` starts from the **issue** end only. A work item may hyperlink several
+issues, so a bare id names no single reporter — `pharos issue trail <id>` is how
+you find out which one you meant.
+
+### `trail`, and the evidence worth reading
+
+Read-only, and it answers from **either** end with the same output shape. The
+field to read is `evidence`: `["hyperlink","marker"]` is a complete link, and
+either one **alone** is a link that only half exists — a finding, not a detail.
+The halves live in different places on purpose: a `Hyperlink` relation on the
+work item, and one comment on the issue carrying `AB#4821` plus the
+machine-readable trailer.
+
+**The marker goes in a comment, never the issue body.** Editing a reporter's
+body collides with them and needs write access nobody has on a community issue.
+
+### `drift` — the report no other tool can produce
+
+`gh` lists issues and Azure DevOps lists work items; **neither holds both
+sides**, so neither can say *these two disagree*. Four kinds, because they want
+four different actions:
+
+| kind | what it means |
+|---|---|
+| `state` | both ends exist and disagree about whether the work is finished |
+| `missing-issue` | the work item names an issue GitHub does not have |
+| `one-sided` | one platform carries the link and the other does not — what a failed `adopt` leaves. Carries the `pharos issue link …` that repairs it |
+| `unreadable` | the GitHub end could not be read, so nothing about this pair is known |
+
+**It scans links, not issues.** An unadopted issue is not drift — that is
+`backfill`'s question. On a repo with four hundred of them, counting "not
+linked" as a problem buries three real findings under three hundred and
+eighty-eight rows of noise.
+
+**"Finished" is read from the project, never guessed**: each work item is judged
+against its own type's categories and the report says which source it used —
+`Resolved` is terminal on a Bug and open on a User Story. When the catalogue
+cannot be read the stock names are used *and said out loud*, because a row is
+uninterpretable without knowing what was counted as finished. An unreadable
+repository is information rather than a fault and never fails the command.
+
+### `backfill` — the adoption path for the repo that already has 400 issues
+
+```bash
+pharos issue backfill contoso/widgets            # previews, then REFUSES (exit 3)
+pharos issue backfill contoso/widgets --dry-run  # the same preview, exit 0
+pharos issue backfill contoso/widgets --label bug --parent 39 --limit 25 --max-writes 50 --yes
+```
+
+**Read the preview before adding `--yes`.** It names the repository, the `gh`
+account it would be reached as, **and the Azure DevOps organisation and project
+the work items would land on** — nothing in the design pairs a repo with a
+board, and a mis-aimed `adopt` is one work item where a mis-aimed `backfill
+--yes` is four hundred, each with a public comment naming a board its reporter
+has nothing to do with.
+
+**Each adoption is two writes**, so four hundred issues is eight hundred against
+a default cap of 20. That cost is worked out *before* anything is written and a
+run that cannot finish is refused, naming both ways forward — rather than
+stopping at write nineteen, which is the outcome you can reason about least.
+
+**It is resumable and needs no state file.** The link *is* the progress record:
+a second run finds the ones the first adopted already linked and carries on, in
+issue-number order. `--state` defaults to `open`, because adopting a closed
+issue creates a work item that is finished before anybody looks at it.
+
+### `close` — the ending of the trail
+
+Closes **both** ends, comments on each pointing at the other, then **re-reads
+both** and reports what actually moved. Two 200s are not proof: a workflow rule
+can refuse a transition on a field the API happily accepted, so **`verified` is
+what was there afterwards** rather than what was sent. Read it.
+
+**There is no hardcodable `Closed`.** The state comes from the project's own
+categories — exactly one terminal state for that type is used, and *several* is
+a refusal naming them and `--to`, because `Done` and `Removed` are both finished
+and mean opposite things. If the catalogue cannot be read at all it refuses
+rather than guessing.
+
+`--to`, **not** `--state`: `--state` already means `open|closed|all` on
+`backfill`. Closing an already-closed pair writes nothing and exits 0. A work
+item linking several issues is refused unless `--all` says so — "close 4821"
+should not read as "close four strangers' issues".
+
+**Pull requests are out of scope and are refused by name.** On GitHub's API
+every PR is also an issue, so `adopt` on a PR number would otherwise mirror
+something none of this models. `close` does not compose `Closes #45` /
+`Fixes AB#123` into a PR body either: those fire on a PR *merge*, so there would
+be nothing to compose into and nothing to verify.
+
 ## What `pharos` does NOT do — read this before you go looking
 
 - **Free-text and code search.** Nothing here covers it. For work items,
@@ -606,6 +839,12 @@ leading slash**. Two things follow:
 - **Wiki content search.** `wiki tree` then `wiki read` is the only way through;
   there is no grep across pages.
 - Pull requests, builds, pipelines.
+- **Anything on GitHub that is not the join.** No issue list, no issue view, no
+  plain comment, no labels or milestones, no pull requests — `gh` does all of it
+  better and a second GitHub CLI would only drift from it. The seven `issue`
+  verbs are the edge and deliberately nothing else.
+- **Jira, Linear, and the Argus board.** Not covered, not planned. "Task",
+  "todo" and "board" mean something else there.
 
 **There is no Azure DevOps MCP server here any more, and that is deliberate.**
 It authenticated through the Azure CLI, so it opened a browser mid-task — which
@@ -617,9 +856,9 @@ routing around it: several things here exist in no other Azure DevOps tool at
 all — wiki page comments and reactions, attachment upload AND removal, inline
 images for a work item field or a wiki page, mentioning somebody in a form that
 actually notifies, importing a Word document or a PDF as a page, editing or
-deleting a work item comment, service hooks, and applying a change under a
-`test` op on `/rev` so a teammate who wrote first cannot be silently
-overwritten. Those are what the
+deleting a work item comment, service hooks, the GitHub-issue join and the
+drift report over it, and applying a change under a `test` op on `/rev` so a
+teammate who wrote first cannot be silently overwritten. Those are what the
 guards are, and they are the reason to come back here rather than hand-roll.
 
 ## Start every task with one command
@@ -739,7 +978,12 @@ true` means stop re-checking the token.
 | `0` | it worked | carry on |
 | `1` | the call failed | check `kind`; retry only if it is `rateLimit` (wait `retryAfterMs`) or transient |
 | `2` | called wrong, or not configured | **never retry unchanged.** Fix the call, or the setup |
-| `3` | a guard here refused | re-run with `--yes` — after deciding it is right |
+| `3` | a guard here refused | re-run with `--yes`, or raise `--max-writes` — after deciding it is right |
+
+**A failure carrying `"platform": "github"` came from GitHub**, not from Azure
+DevOps and not from here — `pharos issue` touches two platforms in one call, and
+which one refused decides whether the fix is a token, a repo binding or a field.
+Its absence means the other side, as it always did.
 
 `"kind": "conflict"` means somebody wrote first. Your work is still valid:
 re-read, re-apply. It carries both revisions — and note that **posting a comment
@@ -801,6 +1045,12 @@ it is about to break. Sub-pages move with their parent.
    not only in a chat log nobody else can read.
 5. Move the state when the work moves, not at the end.
 
+**When the work started as a GitHub issue the loop gains two ends and changes
+one step**: `pharos issue adopt` before step 1, `pharos issue close` after step
+5, and at step 4 the reply to the *reporter* is `pharos issue say` rather than a
+comment on the work item — a comment on the item is invisible to somebody with
+no Azure DevOps account, which is every reporter.
+
 **Every person uses their own token.** Board attribution is per-person, so
 anything you do is recorded against whoever owns `ADO_PAT`. Never suggest
 sharing one.
@@ -813,3 +1063,12 @@ profile that **scripted** shells read, and verifies both permission scopes —
 Work Items and Wiki are separate in Azure DevOps, and a token missing the second
 works fine until the first wiki write days later. A **new** shell is needed
 afterwards.
+
+**The GitHub half is configured separately and follows a different rule.** The
+environment carries no fourth secret: the credential comes from `gh`, and which
+account reaches which repository is a binding on disk, so a `config` error from
+an `issue` verb names `repos.json` rather than an environment variable.
+
+```bash
+pharos setup --repo contoso/widgets --gh-account alisina-tibata
+```
