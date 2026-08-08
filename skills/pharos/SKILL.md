@@ -91,6 +91,13 @@ or winget rather than vendoring anything. **Nothing installs without that flag**
 — `--install all` for a fresh machine, `--install libreoffice,poppler` to
 provision without a terminal.
 
+`--install skill` installs THIS skill as a plugin from the floh-skills
+marketplace. Worth knowing even if you are reading it: **publishing a new
+version does not update an installed one.** `claude plugin update
+pharos@floh-skills` does, and a restart loads it — so a correction can ship and
+sit unread for weeks. If something here contradicts what the tool actually does,
+check your version first.
+
 ## Finding the work: `pharos query`
 
 **Do not reach for `curl` and the WIQL endpoint.** This skill used to hand you a
