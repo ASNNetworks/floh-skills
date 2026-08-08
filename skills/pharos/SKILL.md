@@ -26,6 +26,7 @@ task <id>                      one work item, whole: fields, comments,
 create <type> --title "…"      one work item. --parent goes in the SAME patch
 update <id>                    change a field: --state --priority --assignee
                                --title, or --field Name=value for anything else
+                               --expect-rev <n> pins a revision you read earlier
 link <id> --parent <id>        relate two items. Also --child --related
 unlink <id> --parent <id>      --predecessor --successor --duplicate
 link <id> --wiki-page <path>   link a WIKI PAGE to a work item — the item side
@@ -132,7 +133,12 @@ pharos attach 225 ./bestsellers.xlsx --comment "The numbers"
 
 `update` **reads the item and applies the change under a `test` op on `/rev`**,
 so somebody who wrote between your read and your write gets you a `conflict`
-rather than losing their edit. Setting a value it already has writes nothing and
+rather than losing their edit. Confirmed live against real concurrent writers:
+three rounds, one winner each round, the loser always a 412 `conflict` carrying
+both revisions, and no lost update. **`--expect-rev <n>` pins a revision you
+read earlier** instead of re-reading — reach for it when your read and your
+write are separate calls with thinking in between, which is where a
+read-modify-write actually goes wrong. Setting a value it already has writes nothing and
 says so — a pointless PATCH still bumps `System.Rev` and invalidates every other
 cached revision on the item. `--dry-run` shows the before → after and writes
 nothing. There is no `--yes`: a field edit is an ordinary edit and Azure DevOps
@@ -361,6 +367,19 @@ pharos people ada                 # filter by name or email
 pharos comment add 225 --text "Ready for review @<0f45a818-878d-6d7a-ba8c-1f5568a89ed4>"
 ```
 
+**A mention only works in a COMMENT.** Measured live: the same `@<guid>` written
+into `System.Description` is stored as literal text — no anchor, no mention
+registered, nobody notified. Azure DevOps parses that shorthand on the comments
+endpoint and nowhere else. So a mention put in a description or any other field
+fails in precisely the silent way this section exists to prevent: it reads like
+a mention to every human who sees it and reaches no one.
+
+If you need somebody told, post a comment. Editing a field is not a substitute —
+and note that **every work item write here suppresses notifications on purpose**
+(`update`, `create`, `attach`, `detach`, `link`, `unlink`), so an agent doing
+bookkeeping does not mail the assignee about each step. `comment` is the one
+write that notifies.
+
 The names come from the board's own work items — everyone assigned, creating or
 changing anything — rather than from an identity endpoint, because those live on
 another host and want scopes a work-scoped PAT does not have. So somebody who
@@ -383,12 +402,17 @@ text still import and everything else is refused by name with the reason.
 
 Three rules, because each of them is a way to lose work:
 
-- **A name collision SKIPS and says so.** A page write with an empty version is
-  a *create*, so writing over an existing page is silent data loss.
+- **A derived name never collides — it COUNTS UP.** Importing `Notes.md` when
+  `/Guides/Notes` already exists creates `/Guides/Notes 2`, reports
+  `created: 1, skipped: 0`, and exits 0. Your page is never overwritten, which
+  is the property that matters. But **a blind re-import does not fail, it
+  quietly accumulates** `Notes`, `Notes 2`, `Notes 3` — and every run reports
+  complete success. If you are re-running an import, check the wiki first.
+- **`--as <name>` is the one that SKIPS.** A name you typed is an instruction,
+  so it is never renamed: onto an existing page it skips, says so, and exits 3
+  when nothing else landed. Use it when you want a collision to stop you.
 - **Names are settled against the batch as well as the wiki**, so importing
   `Notes.docx` beside `Notes.pdf` gives two pages rather than one written twice.
-  A name you give with `--as` is never renamed — it is an instruction, so it is
-  allowed to collide and skip.
 - **An empty document is refused.** A scanned PDF carries no extractable text at
   all and PDFKit returns an empty string with no error; an empty page would look
   like a successful import until somebody opened it.
@@ -400,8 +424,10 @@ Three rules, because each of them is a way to lose work:
   empty-document rule would not catch it either — the text is short, not empty.
   If the deck must become a page, read it (above) and write the page yourself.
 
-Exit 3 when **nothing** landed. A partial batch exits 0 and names what skipped —
-retrying it blindly would collide with the pages it just made.
+Exit 3 when **nothing** landed. A partial batch exits 0 and names what skipped.
+Do not retry a partial batch blindly: the files that succeeded will import a
+second time under counted-up names, so you end with duplicates and an exit 0
+saying it all worked. Re-run only the files that skipped.
 
 ## Do not guess a state name — ask
 
