@@ -251,30 +251,59 @@ Two ways this fails **silently**, both measured on a real work item:
   deck and looks like it worked. For a slide deck, or a scanned PDF, the payload
   is usually the images — extract them and actually look at them.
 
-**Known-good on a Claude Code machine provisioned by us, measured 2026-08-08.**
-Conditional on purpose: this skill also runs under other agents on machines
-nobody here set up, so read a missing command as "find your own", not as a bug.
+### First ask whether you read PDFs natively. If you do, this is one command.
+
+Many agents — Claude Code among them — read a PDF **visually**, page by page,
+the way a person looks at it. That covers a scan with no text in it at all, with
+no OCR step. If that is you, the whole problem collapses to one conversion:
+
+```bash
+soffice --headless --convert-to pdf f.docx --outdir ./out    # .pptx, .xlsx too
+# then read ./out/f.pdf with your own file-reading tool
+```
+
+**This is the route that keeps the pictures**, which is the whole failure this
+section is about. Measured on the deck described above — the one whose seven
+text fragments lost the specification: converted to PDF and read, it gives up
+the flow diagram, the screenshot of the configuration UI with its actual
+threshold values, and every row and column of the target output table. One
+command, one read, nothing dropped. The same is true of a `.docx` whose content
+is in a chart or a screenshot.
+
+Prefer it whenever layout or images might carry meaning — a deck always, a
+report usually, a spreadsheet when the shape matters more than the numbers.
+
+### If you only read text, extract it per format
 
 | file | how |
 |---|---|
-| `.pdf` | `pdftotext -layout f.pdf -` — poppler; keeps the table layout |
+| `.pdf` | `pdftotext -layout f.pdf -` — poppler; keeps the table layout. **Empty output means a scan**, not an empty document |
 | scanned `.pdf` | `pdftoppm -png -r 150 f.pdf page`, then look at the PNGs it wrote |
-| `.docx` | `soffice --headless --convert-to "txt:Text (encoded):UTF8" f.docx --outdir ./out` — LibreOffice; tables come out tab-separated |
+| `.docx` | `soffice --headless --convert-to "txt:Text (encoded):UTF8" f.docx --outdir ./out` — tables come out tab-separated |
 | `.xlsx` | `soffice --headless --convert-to csv f.xlsx --outdir ./out` — **first sheet only**, so check whether the workbook has more |
 | `.pptx` | `~/.claude/skills/pptx/.venv/bin/python -m markitdown deck.pptx` — slide text, and it NAMES the embedded images without extracting them |
-| images in a `.pptx` | `unzip -o -q deck.pptx 'ppt/media/*' -d ./out` → `out/ppt/media/*.png` |
+| images inside any of them | `unzip -o -q f.pptx 'ppt/media/*' -d ./out` — also `word/media/` in a `.docx`, `xl/media/` in an `.xlsx` |
 
-**Do not predict what `pdftoppm` names its output.** The page number is padded
-to the width of the page COUNT, so a one-page scan — which is what an attachment
-usually is — gives `page-1.png` while a forty-page one gives `page-01.png`. List
-the directory rather than guessing the name; a guessed name that is not there
-reads as "the render failed" when it worked.
+Two traps in that table, both measured:
+
+- **Do not predict what `pdftoppm` names its output.** The page number is padded
+  to the width of the page COUNT, so a one-page scan — what an attachment
+  usually is — gives `page-1.png` while a forty-page one gives `page-01.png`.
+  List the directory. A guessed name that is not there reads as "the render
+  failed" when it worked.
+- **`--convert-to pdf` on a wide spreadsheet splits COLUMNS across pages.** A
+  40-column sheet became four pages. Still readable, but read them all — and
+  for pure numbers `csv` is the better half of the pair.
 
 `pandoc` is **not** installed here, whatever another skill's instructions say.
 `markitdown` in that venv does `.pptx` and nothing else: it went in without the
 `[docx]`, `[pdf]` and `[xlsx]` extras and raises `MissingDependencyException`
 for all three. That is why LibreOffice, not markitdown, is the line above for
 everything except a deck.
+
+**Known-good on a Claude Code machine provisioned by us, measured 2026-08-08.**
+Conditional on purpose: this skill also runs under other agents on machines
+nobody here set up, so read a missing command as "find your own", not as a bug.
 
 ## Mentioning somebody
 
