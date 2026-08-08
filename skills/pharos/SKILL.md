@@ -257,15 +257,24 @@ nobody here set up, so read a missing command as "find your own", not as a bug.
 
 | file | how |
 |---|---|
-| `.pdf` | `pdftotext -layout f.pdf -` — poppler; 40 KB of text with the table layout kept |
-| scanned `.pdf` | `pdftoppm -png -r 150 f.pdf page` → `page-01.png`, then look at the image |
+| `.pdf` | `pdftotext -layout f.pdf -` — poppler; keeps the table layout |
+| scanned `.pdf` | `pdftoppm -png -r 150 f.pdf page`, then look at the PNGs it wrote |
 | `.docx` | `soffice --headless --convert-to "txt:Text (encoded):UTF8" f.docx --outdir ./out` — LibreOffice; tables come out tab-separated |
+| `.xlsx` | `soffice --headless --convert-to csv f.xlsx --outdir ./out` — **first sheet only**, so check whether the workbook has more |
 | `.pptx` | `~/.claude/skills/pptx/.venv/bin/python -m markitdown deck.pptx` — slide text, and it NAMES the embedded images without extracting them |
 | images in a `.pptx` | `unzip -o -q deck.pptx 'ppt/media/*' -d ./out` → `out/ppt/media/*.png` |
 
-`pandoc` is **not** installed here, whatever another skill's instructions say,
-and `markitdown` in that venv does `.pptx` only — it went in without the
-`[docx]` and `[pdf]` extras and raises `MissingDependencyException` for both.
+**Do not predict what `pdftoppm` names its output.** The page number is padded
+to the width of the page COUNT, so a one-page scan — which is what an attachment
+usually is — gives `page-1.png` while a forty-page one gives `page-01.png`. List
+the directory rather than guessing the name; a guessed name that is not there
+reads as "the render failed" when it worked.
+
+`pandoc` is **not** installed here, whatever another skill's instructions say.
+`markitdown` in that venv does `.pptx` and nothing else: it went in without the
+`[docx]`, `[pdf]` and `[xlsx]` extras and raises `MissingDependencyException`
+for all three. That is why LibreOffice, not markitdown, is the line above for
+everything except a deck.
 
 ## Mentioning somebody
 
