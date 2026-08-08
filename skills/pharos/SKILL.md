@@ -406,8 +406,12 @@ pharos wiki import ./report.pdf --as "Q3 Report"
 and anything done to them would be reformatting a document somebody wrote
 deliberately. `.docx`, `.pdf`, `.rtf` and `.html` are converted by
 `pharos-convert`, which is the **same converter the macOS app uses**, so both
-produce the same page from the same file. If it is not on PATH, markdown and
-text still import and everything else is refused by name with the reason.
+produce the same page from the same file.
+
+**It is a separate download, and not everybody has it.** Without it, markdown
+and text still import and everything else is refused by name with the reason —
+narrowed, not broken. `pharos doctor` says whether this machine has it;
+`pharos setup --convert` fetches it (macOS only for now).
 
 Three rules, because each of them is a way to lose work:
 
