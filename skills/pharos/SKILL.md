@@ -39,7 +39,8 @@ links                          every relation type this ORG has, and which
 fields [--type T]              what a field will ACCEPT — allowed values
 attach <id> <file>             put a FILE on a work item (Attachments list)
 detach <id> <url-or-guid>      take one off. --yes
-download <id-or-url>           read one back. --out <path> or it writes nothing
+download <item-id|guid|url>    read one back. A WORK ITEM id with --name <file>,
+                               or --all --out <dir>. --out or nothing is written
 image <file>                   upload a PICTURE for use inside text. Prints the
                                markdown to paste. NOT the same as attach
 people [query]                 who can be @mentioned, with the @<guid> form
@@ -54,7 +55,8 @@ wiki rename <path> <new name>  the same call, leaf only. BOTH need --yes
 wiki duplicate <path> [to]     a verb Azure DevOps lacks. "<path> - Copy N"
 wiki image <file>              a picture for a PAGE or page comment. Different
                                endpoint from `image`, and the name is unique-d
-wiki import <file...>          .md .txt .docx .pdf .rtf .html -> pages
+wiki import <file...>          .md .txt .docx .pdf .rtf .html -> pages. A
+                               .pptx is refused, on purpose — see below
                                --under <path> --as <name>
 comment list | add | edit | delete   <target> is a work item id OR a wiki path
 comment react | unreact | reactors   like dislike heart hooray smile confused
@@ -206,6 +208,65 @@ Use that path, **not** an absolute url — a page linking to a `wit/attachments`
 url renders for anyone with a session and breaks for everybody else. The same
 markdown works in a page and in a page comment.
 
+## Getting an attachment off a work item
+
+`pharos task <id>` lists what is attached, with each file's **GUID** — in the
+JSON and in `--pretty`. Then take it in one call, by name:
+
+```bash
+pharos download 41 --name Skills.pptx --out ./Skills.pptx
+pharos download 41 --all --out ./attachments      # every attachment on the item
+pharos download <guid-or-url> --out ./file.bin    # when you already hold one
+```
+
+**`--out` is what writes.** Without it you get the size and no file — raw bytes
+on stdout would corrupt the JSON every other verb prints.
+
+A bare `pharos download 41` is a usage error **carrying the list** — name, GUID
+and size — so choosing the right file never costs a second call. Two attachments
+with the same name refuse rather than guess: attachments are immutable, so
+attaching a file twice makes two of them and the name is not an identity.
+
+### Reading what is inside it is YOUR job, with YOUR tooling
+
+`download` gets you bytes on disk and stops there. Turning a `.docx`, `.pptx`,
+`.xlsx` or `.pdf` into something you can read is your environment's job.
+
+**Do not use `pharos-convert` for it.** It is `wiki import`'s converter, shared
+with the macOS app so that both produce the same *page* from the same file — its
+output is shaped to become a wiki page, and reaching for it here couples what you
+read to the app's import path. It also cannot read `.pptx` at all.
+
+Two ways this fails **silently**, both measured on a real work item:
+
+- **You checked for the tool in the wrong place.** `which markitdown` against
+  the system PATH and `import docx` against the system `python3` both come back
+  empty on a machine where that tooling is installed — in a per-skill venv. An
+  agent that runs those two checks concludes "nothing here" and routes around
+  tools that were there the whole time. Look where *your* agent keeps its
+  tooling before concluding it is absent.
+- **Non-empty text is not proof you read the document.** One real `.pptx`
+  extracted to seven fragments, about 90 characters; the entire specification
+  was in two embedded PNGs. Every text-only reader returns something for that
+  deck and looks like it worked. For a slide deck, or a scanned PDF, the payload
+  is usually the images — extract them and actually look at them.
+
+**Known-good on a Claude Code machine provisioned by us, measured 2026-08-08.**
+Conditional on purpose: this skill also runs under other agents on machines
+nobody here set up, so read a missing command as "find your own", not as a bug.
+
+| file | how |
+|---|---|
+| `.pdf` | `pdftotext -layout f.pdf -` — poppler; 40 KB of text with the table layout kept |
+| scanned `.pdf` | `pdftoppm -png -r 150 f.pdf page` → `page-01.png`, then look at the image |
+| `.docx` | `soffice --headless --convert-to "txt:Text (encoded):UTF8" f.docx --outdir ./out` — LibreOffice; tables come out tab-separated |
+| `.pptx` | `~/.claude/skills/pptx/.venv/bin/python -m markitdown deck.pptx` — slide text, and it NAMES the embedded images without extracting them |
+| images in a `.pptx` | `unzip -o -q deck.pptx 'ppt/media/*' -d ./out` → `out/ppt/media/*.png` |
+
+`pandoc` is **not** installed here, whatever another skill's instructions say,
+and `markitdown` in that venv does `.pptx` only — it went in without the
+`[docx]` and `[pdf]` extras and raises `MissingDependencyException` for both.
+
 ## Mentioning somebody
 
 **A mention is `@<guid>` and nothing else notifies.** `@Ada Lovelace` written
@@ -250,6 +311,13 @@ Three rules, because each of them is a way to lose work:
 - **An empty document is refused.** A scanned PDF carries no extractable text at
   all and PDFKit returns an empty string with no error; an empty page would look
   like a successful import until somebody opened it.
+- **A `.pptx` is refused by name**, and that is the answer rather than a gap.
+  `pharos-convert Skills.pptx` exits 2 with *"Skills.pptx is not a kind of file
+  this can import."* **Do not route around it** by extracting the slide text
+  yourself and importing that: a deck's payload is usually its images, so the
+  text-only page looks like a successful import and has lost the content. The
+  empty-document rule would not catch it either — the text is short, not empty.
+  If the deck must become a page, read it (above) and write the page yourself.
 
 Exit 3 when **nothing** landed. A partial batch exits 0 and names what skipped —
 retrying it blindly would collide with the pages it just made.
