@@ -280,8 +280,8 @@ report usually, a spreadsheet when the shape matters more than the numbers.
 | `.pdf` | `pdftotext -layout f.pdf -` — poppler; keeps the table layout. **Empty output means a scan**, not an empty document |
 | scanned `.pdf` | `pdftoppm -png -r 150 f.pdf page`, then look at the PNGs it wrote |
 | `.docx` | `soffice --headless --convert-to "txt:Text (encoded):UTF8" f.docx --outdir ./out` — tables come out tab-separated |
-| `.xlsx` | `soffice --headless --convert-to csv f.xlsx --outdir ./out` — **first sheet only**, so check whether the workbook has more |
-| `.pptx` | `~/.claude/skills/pptx/.venv/bin/python -m markitdown deck.pptx` — slide text, and it NAMES the embedded images without extracting them |
+| `.xlsx` | `soffice --headless --convert-to csv f.xlsx --outdir ./out` — **first sheet only**. Count them first: `unzip -p f.xlsx xl/workbook.xml \| grep -o '<sheet [^>]*name="[^"]*"'` |
+| `.pptx` | `~/.claude/skills/pptx/.venv/bin/python -m markitdown deck.pptx` — slide text. Its `![](Graphic5.jpg)` lines are SHAPE names, not files: see below |
 | images inside any of them | `unzip -o -q f.pptx 'ppt/media/*' -d ./out` — also `word/media/` in a `.docx`, `xl/media/` in an `.xlsx` |
 
 Two traps in that table, both measured:
@@ -291,9 +291,43 @@ Two traps in that table, both measured:
   usually is — gives `page-1.png` while a forty-page one gives `page-01.png`.
   List the directory. A guessed name that is not there reads as "the render
   failed" when it worked.
-- **`--convert-to pdf` on a wide spreadsheet splits COLUMNS across pages.** A
-  40-column sheet became four pages. Still readable, but read them all — and
-  for pure numbers `csv` is the better half of the pair.
+- **`--convert-to pdf` paginates a spreadsheet twice over, and only one of them
+  is obvious.** Long splits by ROW, which is ordinary. **Wide splits by
+  COLUMN** — a 40-column sheet became four pages, each carrying a different
+  slice of the columns for the same rows. So a page count above one does not
+  tell you which kind you have: read every page, and if a row looks like it is
+  missing fields, look for them on the next one. For pure numbers `csv` is the
+  better half of the pair.
+
+**Count the parts before you trust a conversion.** Every one of these formats is
+a ZIP, so the file itself will tell you what it holds — and each of these has
+been the thing that was quietly missing:
+
+```bash
+unzip -p f.xlsx xl/workbook.xml | grep -o '<sheet [^>]*name="[^"]*"'   # sheets
+unzip -l f.pptx | grep -c 'ppt/slides/slide[0-9]*\.xml'                # slides
+unzip -l f.docx | grep 'word/media/'                                   # images
+```
+
+If the images list is empty, text extraction loses nothing and the cheap route
+is safe. If it is not, that is your warning that the payload may not be text.
+
+**`markitdown`'s image lines name SHAPES, not files.** A deck that emits
+`![](Graphic5.jpg)`, `![](Graphic8.jpg)` and `![](Graphic9.jpg)` for one slide
+turned out to contain exactly two media files in the whole archive — named
+`image1.png` and `image2.svg`, matching none of them. Those are PowerPoint's
+shape names. Do not go looking for a file by one, and do not read three of them
+as three pictures. To map media to the slide that uses it, read the
+relationships: `unzip -p f.pptx ppt/slides/_rels/slide6.xml.rels`.
+
+**Text extraction tells you WHICH strings are on a slide and never WHERE.** That
+is not a nuance — measured on a real deck, one slide carried both `IDENTITEIT`
+and a leftover `Wat is ChatGPT?` from a different presentation, in the same
+place, printing on top of each other. Extracted, they are two tidy lines and
+read as a title with a subtitle. Rendered, the slide is visibly broken. So a
+duplicated, stale or overlapping shape is invisible to every text route by
+construction — if you are reviewing a deck rather than mining it for facts, look
+at it.
 
 `pandoc` is **not** installed here, whatever another skill's instructions say.
 `markitdown` in that venv does `.pptx` and nothing else: it went in without the
