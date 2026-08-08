@@ -66,6 +66,8 @@ hooks list | check | create | repoint | delete    service hooks for realtime.
                                already in use
 plan <file>                    an implementation plan → a work item tree
 setup                          org, project, token → keychain + shell profile
+doctor                         what is installed on THIS machine, what is
+                               missing, and what each missing thing costs
 ```
 
 Text input: `--text` / `--file` / `--stdin`. Global: `--pretty` for a human,
@@ -74,6 +76,13 @@ Text input: `--text` / `--file` / `--stdin`. Global: `--pretty` for a human,
 **`ADO_ORG`, `ADO_PROJECT` and `ADO_PAT` are already in the environment** after
 setup. Do not check them before working; a missing one announces itself as
 `"kind": "config"` on exit 2, which is the only time it matters.
+
+**Reading an attachment needs tools this machine may not have**, and the
+commands further down name them with confidence they have not earned on yours.
+`pharos doctor` answers that in one call: what is present, its version and where
+it resolved, what is missing, and what each missing thing actually costs. It is
+read-only, offline, and works before anything is configured — so it is also the
+right first move when something behaves oddly.
 
 ## Finding the work: `pharos query`
 
