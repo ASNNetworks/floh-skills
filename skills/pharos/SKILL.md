@@ -38,7 +38,7 @@ links                          every relation type this ORG has, and which
                                --flag reaches it (six of ~eighteen)
 fields [--type T]              what a field will ACCEPT — allowed values
 attach <id> <file>             put a FILE on a work item (Attachments list)
-detach <id> <url-or-guid>      take one off. --yes
+detach <id> <url-or-guid>      take one off. --yes. Or --name <file>
 download <item-id|guid|url>    read one back. A WORK ITEM id with --name <file>,
                                or --all --out <dir>. --out or nothing is written
 image <file>                   upload a PICTURE for use inside text. Prints the
@@ -143,7 +143,9 @@ two calls, one command. Attachments are **immutable**: attaching the same file
 twice makes two of them, and there is no replace and no versioning. `detach`
 takes one off; it needs `--yes`, finds the attachment by identity rather than by
 position, and leaves the bytes in Azure DevOps so re-attaching the url puts it
-back.
+back. Name the file with `--name <file>` or pass the GUID — and as with
+`download`, two files sharing a name REFUSE rather than removing whichever
+sorts first.
 
 `create` puts `--parent` in the same patch as the fields, so a child is never
 briefly an orphan, and it takes the same flag names as `update`.
@@ -226,6 +228,13 @@ A bare `pharos download 41` is a usage error **carrying the list** — name, GUI
 and size — so choosing the right file never costs a second call. Two attachments
 with the same name refuse rather than guess: attachments are immutable, so
 attaching a file twice makes two of them and the name is not an identity.
+
+`detach` takes the same `--name <file>`, so the verb you reach for after reading
+`task --pretty` accepts what it showed you:
+
+```bash
+pharos detach 41 --name Skills.pptx --yes      # --dry-run previews it first
+```
 
 ### Reading what is inside it is YOUR job, with YOUR tooling
 
