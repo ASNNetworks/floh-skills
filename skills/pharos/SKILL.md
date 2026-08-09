@@ -1,6 +1,6 @@
 ---
 name: pharos
-description: "Use for AZURE DEVOPS work — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you in Azure DevOps; reading or writing an ADO project wiki page and its comments; linking a plan to an epic; attaching a file to a work item or taking one off; inline images in a description, comment or wiki page; @mentioning somebody so they are actually notified; importing Markdown, Word or PDF files as wiki pages; and whether a failed ADO call is worth retrying. ALSO the GITHUB ISSUE ↔ work item EDGE: adopting an issue as a work item linked at both ends, bulk-adopting a repo, one reply reaching the reporter and the board at once, where they have drifted, and closing both ends together. NOT a GitHub CLI: listing, viewing or commenting on an issue is `gh`'s job. NOT for other trackers — the Argus board, Jira or Linear."
+description: "Use for AZURE DEVOPS work — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you; reading or writing an ADO wiki page and its comments; linking a plan to an epic; attaching a file to a work item or taking one off; inline images in a field or wiki page; @mentioning somebody so they are notified; importing Markdown, Word or PDF as wiki pages; and whether a failed call is retryable. ALSO the GITHUB ISSUE ↔ work item EDGE: adopting an issue as a work item linked at both ends, bulk-adopting a repo, one reply reaching reporter and board, where they have drifted, closing both ends together, and changing a comment that ALREADY EXISTS: editing, deleting, reacting, hiding, pinning. NOT a GitHub CLI: listing or viewing an issue, or POSTING a comment, is `gh`'s job. NOT for other trackers — Argus, Jira, Linear."
 license: Proprietary
 ---
 
@@ -59,8 +59,16 @@ wiki image <file>              a picture for a PAGE or page comment. Different
 wiki import <file...>          .md .txt .docx .pdf .rtf .html -> pages. A
                                .pptx is refused, on purpose — see below
                                --under <path> --as <name>
-comment list | add | edit | delete   <target> is a work item id OR a wiki path
-comment react | unreact | reactors   like dislike heart hooray smile confused
+comment list | add | edit | delete   <target> is a work item id, a wiki path,
+comment react | unreact | reactors   OR a GitHub issue (contoso/widgets#45)
+comment hide | unhide | pin | unpin  GITHUB ONLY — Azure DevOps has neither
+                               REACTIONS ARE NOT ONE VOCABULARY. Azure DevOps:
+                               like dislike heart hooray smile confused. GitHub:
+                               thumbs-up thumbs-down laugh hooray confused heart
+                               rocket eyes. Passing one platform's name to the
+                               other is refused, not translated
+                               `comment add` is REFUSED on a GitHub issue — see
+                               "Editing a GitHub comment" below
 issue adopt <owner/name#45>    a GitHub ISSUE becomes a work item, with BOTH
                                ends of the link written. --type --title --parent
 issue link <owner/name#45> <id>   join an existing pair — or finish a join that
@@ -76,6 +84,11 @@ issue backfill <owner/name>    bulk adopt every issue the board does not link
                                yet. Needs --yes. --limit --state --label
 issue close <id|owner/name#45> close BOTH ends, then RE-READ both to say what
                                actually moved. --to --reason --all
+issue edit <owner/name#45>     the issue's OWN fields, behind a lost-update
+                               guard. Needs --yes. --title --text/--file/--stdin
+                               --milestone --add-label --remove-label
+                               --add-assignee --remove-assignee --if-title
+                               --if-body. `gh issue edit` is the UNGUARDED one
 hooks list | check | create | repoint | delete    service hooks for realtime.
                                `check` needs --hub <url>; `list` shows the URL
                                already in use
@@ -632,6 +645,25 @@ plainly commenting on an issue is `gh`'s job and `gh` is better at it; closing
 one *end* is `gh issue close`. Pharos owns the one thing `gh` cannot see: which
 work item tracks this issue, written so it survives in both databases.
 
+The one place that line moved: **a comment that already exists** is reachable
+through `pharos comment <verb> <owner/name#45>` — edit, delete, react, unreact,
+reactors, hide, unhide, pin, unpin. Two reasons, and neither is symmetry for its
+own sake. Editing or deleting one can destroy the link record, so it needs the
+guard below rather than a bare `gh api`. And hiding or pinning has **no
+first-class `gh` verb at all** — they are GraphQL mutations with no REST route,
+which is the "nothing else can do this" test the rest of these verbs pass.
+Posting a *new* comment is still not ours.
+
+The second place it moved, and it is the only verb here that overlaps `gh` head
+on: **`pharos issue edit` exists to REFUSE.** `gh issue edit` does the same
+write and does it well — what it cannot do is notice that somebody changed the
+thing you were overwriting. It reads nothing and compares nothing, so if a
+colleague renamed the issue while you were composing, their rename is gone and
+neither of you is told. That is fine for a human at a terminal and wrong for an
+agent, which reads an issue, spends a minute thinking, and writes back into a
+world that moved. **If you want an unguarded edit, use `gh issue edit` — it is
+right there and it is better at it.**
+
 Azure DevOps has its own GitHub integration and **the link it makes carries
 nothing** — title, body, comments, labels and state stay on their own island,
 and the transition only ever fires from a commit or a PR merge, never from
@@ -645,7 +677,51 @@ pharos issue say   contoso/widgets#45 --file reply.md
 pharos issue drift                                  # where the two disagree
 pharos issue backfill contoso/widgets --limit 25 --yes
 pharos issue close 4821 --text "Shipped in 1.4.0."
+pharos issue edit  contoso/widgets#45 --title "Crash on resize" --yes
 ```
+
+### Editing an issue, and the guard GitHub does not give us
+
+**There is no conditional write.** `PATCH /repos/{o}/{r}/issues/{n}` answers
+**400** to `If-Match` — measured, not assumed — so the `{"op":"test","path":
+"/rev"}` guarantee behind every Azure DevOps patch has no GitHub equivalent.
+Never send `If-Match` here yourself either: it is not inert, it fails the write,
+and the 400 reads like a malformed body.
+
+**And do not guard on `updated_at` or the ETag.** Both move when somebody merely
+*comments* on the issue, so a guard keyed on either refuses a good edit for a
+change that touched nothing — it fires on the case that is *not* a collision.
+
+So the guard compares the **value of the field you are overwriting**: re-read
+immediately before sending, and refuse only if that text moved. A comment cannot
+cause it, which is what makes the refusal worth reading.
+
+| you pass | the base is | what it protects |
+|---|---|---|
+| nothing | this command's own read | one round trip. Honest, and small |
+| `--if-title` / `--if-body` / `--if-body-file` | what **you** saw | the whole gap between your read and your write |
+
+Pass `--if-*` whenever you read the issue and then thought about it — that gap is
+where a collision actually happens. The output says which window it guarded, as
+`fields.guard.window`: `in-command` or `caller`.
+
+A refusal is `kind: "conflict"`, exit **1**, and carries `conflicts` (base,
+remote and proposed for each field) plus `attribution` naming who renamed it.
+Re-read, fold their change into yours, edit again with `--if-title` set to what
+you just read. **It is not atomic and nothing client-side can make it so** — it
+narrows the race to one round trip rather than closing it.
+
+Two things GitHub does *quietly*, which this verb reports and a bare `gh api`
+would not:
+
+| endpoint | the silence |
+|---|---|
+| `POST …/labels` | **creates** a repository label that does not exist — 200, grey, permanent, spelled exactly as you typed it. So an unknown label is REFUSED with the near misses named; `--create-label` is how you mean it |
+| `POST …/assignees` | **ignores** a login it will not assign and still answers 201. Read `assignees.ignored` — a status code is not the answer here |
+
+Labels and assignees go through those add/remove endpoints and never through the
+whole-issue PATCH, which carries them as *whole arrays* — one label write would
+otherwise blindly overwrite every label on the issue.
 
 ### Bind the repository first, or none of this runs
 
@@ -829,6 +905,71 @@ something none of this models. `close` does not compose `Closes #45` /
 `Fixes AB#123` into a PR body either: those fire on a PR *merge*, so there would
 be nothing to compose into and nothing to verify.
 
+### Editing a GitHub comment, and the trailer you must not break
+
+A comment that already exists is `pharos comment`, with the issue as the target.
+The verb set is the one you already know from work items and wiki pages:
+
+```bash
+pharos comment list   contoso/widgets#45              # ids, state, and what you MAY do
+pharos comment edit   contoso/widgets#45 900 --file fixed.md
+pharos comment delete contoso/widgets#45 900 --yes
+pharos comment react  contoso/widgets#45 900 thumbs-up
+pharos comment hide   contoso/widgets#45 900 off-topic
+pharos comment pin    contoso/widgets#45 900
+```
+
+**Start with `list`.** It is the only way to learn a comment id, and it also
+answers the question that saves a failed write: every row carries a `may` object
+— `edit`, `delete`, `hide`, `pin`, `react` — read from GitHub's own view of what
+this account may do. A comment you may not edit is `"edit": false` before you
+try, not a 403 afterwards. Each row also carries `pharosAuthored` and
+`workItemId`, so you can see at a glance which comment is the link.
+
+Two ids come back per comment and **both are printed because neither can be
+derived from the other**: `id` is the number that edit, delete and reactions
+address, `nodeId` is what hide and pin take. Either is accepted anywhere a
+comment is named; passing back the one the verb wants saves a request.
+
+**An edit cannot double or strip the `pharos:v1` trailer, and this is enforced
+rather than requested.** That trailer is the durable record of which work item
+tracks this issue *and* the guard that stops the two platforms summarising each
+other's summaries. So:
+
+| what you send | what happens |
+|---|---|
+| new prose, no trailer | the existing trailer is **restored**, and `markerPreserved: true` says so |
+| the body you read back, trailer intact | sent unchanged |
+| two trailers | refused — `doubled` |
+| a trailer naming a different work item | refused — `repointed`; `pharos issue link` is the verb for that |
+| a trailer on a comment that had none | refused — `forged` |
+
+You do not have to think about any of this: hand over the words you want and the
+record survives. It is written down because the refusals name a reason, and the
+reason is actionable.
+
+**Deleting the comment that carries the trailer destroys the GitHub half of the
+link.** It is allowed — a mis-adoption is a real thing — but the `--yes` refusal
+says so first, names the work item, and gives you the `pharos issue link` command
+that puts it back. Under `--dry-run` you get the same preview and exit 0. A
+delete that finds the comment already gone reports `alreadyGone: true` and
+succeeds, so a retry after a lost reply is safe.
+
+**`hide` and `pin` exist on GitHub and nowhere else** — they are GraphQL
+mutations with no REST route, which is why `gh` has no verb for them. Hiding
+needs a classifier and there is no neutral default, because GitHub shows it
+beside the hidden comment: `spam`, `abuse`, `off-topic`, `outdated`,
+`duplicate`, `resolved`, `low-quality`. Ask for `off-topic` and `off-topic` is
+what reads back. On a work item or a wiki page these four verbs are refused with
+"Azure DevOps has neither" rather than as an unknown verb — there is no endpoint
+to go looking for.
+
+**`pharos comment add` is refused on a GitHub issue.** Posting is already
+covered twice and which one you want depends on whether the board should hear:
+`pharos issue say` writes to the reporter *and* the work item, `gh issue comment`
+writes to GitHub only. A third door here would post on an adopted issue that the
+work item never hears about — the exact asymmetry `say` exists to prevent.
+
 ## What `pharos` does NOT do — read this before you go looking
 
 - **Free-text and code search.** Nothing here covers it. For work items,
@@ -839,10 +980,12 @@ be nothing to compose into and nothing to verify.
 - **Wiki content search.** `wiki tree` then `wiki read` is the only way through;
   there is no grep across pages.
 - Pull requests, builds, pipelines.
-- **Anything on GitHub that is not the join.** No issue list, no issue view, no
-  plain comment, no labels or milestones, no pull requests — `gh` does all of it
-  better and a second GitHub CLI would only drift from it. The seven `issue`
-  verbs are the edge and deliberately nothing else.
+- **Almost anything on GitHub that is not the join.** No issue list, no issue
+  view, no *posting* a comment, no labels or milestones, no pull requests — `gh`
+  does all of it better and a second GitHub CLI would only drift from it. The
+  seven `issue` verbs are the edge. The one addition is a comment that already
+  exists (`pharos comment <verb> <owner/name#45>`): editing or deleting one can
+  break the link record, and hiding or pinning has no `gh` verb at all.
 - **Jira, Linear, and the Argus board.** Not covered, not planned. "Task",
   "todo" and "board" mean something else there.
 
@@ -1072,3 +1215,12 @@ an `issue` verb names `repos.json` rather than an environment variable.
 ```bash
 pharos setup --repo contoso/widgets --gh-account alisina-tibata
 ```
+
+**A verb whose target is a GitHub issue does not need `ADO_PAT` at all.**
+`pharos comment list|edit|delete|react|unreact|reactors|hide|unhide|pin|unpin
+<owner/name#n>` runs on `gh`'s credential alone, on a machine that has never had
+an Azure DevOps token. So a `config` error naming `ADO_PAT` from one of those is
+a defect worth reporting, not something to go and provision a token over. The
+two credentials are independent — separate keychain entries, and `pharos doctor`
+reports them separately — and `pharos issue` is the one family that genuinely
+needs both, because it writes to both platforms in one invocation.
