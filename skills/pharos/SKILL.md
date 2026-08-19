@@ -1,6 +1,6 @@
 ---
 name: pharos
-description: "Use for AZURE DEVOPS work — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\", \"what's on 210\"). Covers reading or updating an ADO work item, ticket, bug, story or epic; the ADO board, backlog, sprint or iteration; what is assigned to you; reading or writing an ADO wiki page and its comments; linking a plan to an epic; attaching a file to a work item or taking one off; inline images in a field or wiki page; @mentioning somebody so they are notified; importing Markdown, Word or PDF as wiki pages; and whether a failed call is retryable. ALSO the GITHUB ISSUE ↔ work item EDGE: adopting an issue as a work item linked at both ends, bulk-adopting a repo, one reply reaching reporter and board, where they have drifted, closing both ends together, and changing a comment that ALREADY EXISTS: editing, deleting, reacting, hiding, pinning. NOT a GitHub CLI: listing or viewing an issue, or POSTING a comment, is `gh`'s job. NOT for other trackers — Argus, Jira, Linear."
+description: "Use for AZURE DEVOPS work — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\"). Covers reading or updating a work item, bug, story or epic; the board, backlog, sprint or iteration; what is assigned to you; reading or writing a wiki page and its comments; searching the board and wiki for a phrase; linking a plan to an epic; attaching a file to a work item or taking one off; inline images in a field or page; @mentioning somebody so they are notified; importing Markdown, Word or PDF as pages; and whether a call is retryable. ALSO the GITHUB ISSUE ↔ work item EDGE: adopting an issue as a work item linked at both ends, bulk-adopting a repo, one reply reaching both, where they drifted, closing both ends together, a PULL REQUEST and its work item, and changing a comment that ALREADY EXISTS: editing, deleting, reacting, hiding, pinning. NOT a GitHub CLI: listing or viewing an issue, or POSTING a comment, is `gh`'s job. NOT for other trackers — Argus, Jira, Linear."
 license: Proprietary
 ---
 
@@ -17,6 +17,12 @@ whoami                         who ADO_PAT belongs to. @Me resolves to this
 types                          what --state and --type will ACCEPT, per type
 query                          WHICH work items — assigned to you, in a sprint,
                                of a type, still open. Hydrated items, not ids.
+search <terms...>              WHERE something is WRITTEN — full text across
+                               work items AND wiki pages, in one call. Reaches
+                               descriptions, discussion and page bodies, which
+                               `query` cannot. Each result carries the MATCHING
+                               LINE. --items / --wiki to narrow, --org for the
+                               whole organisation, --top (default 25)
 task <id>                      one work item, whole: fields, comments,
                                attachments, relations WITH titles, and the
                                content + discussion of every linked wiki page
@@ -78,6 +84,13 @@ issue say <owner/name#45>      ONE message, TWO audiences: the whole of it to
                                comment's URL to the board. --summary
 issue trail <id|owner/name#45> the whole trail from EITHER end, with the
                                evidence for each half. Read-only
+pr <owner/name#123>            a PULL REQUEST and the work it belongs to:
+                               state, draft, review verdict, WHICH CHECKS ARE
+                               RED, the issues it closes, and the work items it
+                               reaches — via AB#123 in the body OR via an
+                               adopted issue named by "Fixes #45". Also where
+                               the pull request and the board DISAGREE
+                               --no-work-items  skip the transitive lookup
 issue drift                    where the two platforms DISAGREE — the report no
                                other tool can produce. --repo --limit --wiql
 issue backfill <owner/name>    bulk adopt every issue the board does not link
@@ -100,6 +113,14 @@ setup                          org, project, token → keychain + shell profile
                                --repo owner/name --gh-account <login>  bind a
                                repository to the GitHub account that reaches
                                it. BOTH or NEITHER — `issue` needs this first
+bridge show|labels             what an adopted issue BECOMES: which work item
+                               type each GitHub label maps to. `labels --repo
+                               owner/name` shows what is mapped, what an
+                               unmapped one would default to, and which of
+                               those it is
+bridge map|unmap|digest        edit that mapping (--label is an ID, not a name
+                               — ids survive a rename), and when a digest is
+                               written back to the work item
 doctor                         what is installed on THIS machine, what is
                                missing, and what each missing thing costs
 ```
@@ -179,6 +200,135 @@ Do NOT write `[System.State] NOT IN GROUP 'Completed'` if you reach for `--wiql`
 It parses, returns 200, and matches **everything** — `IN GROUP` covers work item
 TYPE categories only, and an unknown group resolves to the empty set with no
 error. Measured, 2026-08-05.
+
+## After adoption, the work becomes code: `pharos pr`
+
+`issue trail` follows filing -> adoption -> close. It stops at the moment the
+work becomes a branch. `pharos pr` is the part that does not.
+
+```bash
+pharos pr contoso/widgets#123              # the pull request AND the board
+pharos pr contoso/widgets#123 --pretty
+pharos pr contoso/widgets#123 --no-work-items   # skip the transitive lookup
+```
+
+One call replaces `gh pr view` + `gh pr checks` + a WIQL query + a relations
+read, across two credentials — and answers one question none of them can.
+
+**Two paths reach a work item, and the implicit one is the one that fires:**
+
+| | |
+|---|---|
+| `AB#4821` in the body | explicit. What Azure Boards' own app reads |
+| `Fixes #45`, where #45 is adopted | **the one that actually happens** |
+
+The second costs one read per closed issue (its comments, where the `pharos:v1`
+trailer lives) and is why `--no-work-items` exists for when you do not need it.
+
+### `disagreements` is the part nothing else can produce
+
+```jsonc
+{
+  "pullRequest": { "number": 123, "state": "MERGED", "merged": true,
+                   "review": "APPROVED", "checks": "FAILURE",
+                   "failingChecks": [ { "name": "e2e-tests", "conclusion": "FAILURE" } ] },
+  "closesIssues": [45],
+  "workItems": [ { "id": 4821, "type": "Issue", "state": "To Do", "title": "…" } ],
+  "disagreements": [
+    "#4821 is \"To Do\" but this pull request is already MERGED — the work shipped and the board never moved."
+  ],
+  "problems": []
+}
+```
+
+Azure DevOps cannot see the pull request and GitHub does not know the work item
+exists, so **neither system will ever report this**. An empty `disagreements`
+means they agree; it is silent when there is nothing to say.
+
+Three things about the shape:
+
+- **`checks` is the rollup and it is authoritative. `failingChecks` names the
+  red ones** — found by filtering every context, not by showing the first few.
+  Measured: real pull requests report a `FAILURE` rollup while their first
+  several contexts all read `SUCCESS`, because the red one is further down.
+- **`NONE` is not `SUCCESS`.** A pull request with no checks configured reports
+  `NONE`, and a still-running one is `PENDING`, not a failure.
+- **`state` has three values** — `OPEN`, `CLOSED`, `MERGED`. Merged is its own
+  state, not a kind of closed, and `merged: true` is the field to test.
+
+Posting a comment on a pull request is still `gh`'s job, exactly as it is for an
+issue. This verb reads; it does not write.
+
+## Finding where it is WRITTEN: `pharos search`
+
+`query` answers *which work items*. `search` answers *where has this been
+written about* — and they are not the same question.
+
+```bash
+pharos search "retry backoff"              # work items AND wiki, one call
+pharos search retry backoff                # quoting is optional
+pharos search "sprint policy" --wiki       # pages only
+pharos search "flaky" --items --type Bug   # work items only, filtered
+pharos search "onboarding" --org           # the whole organisation
+```
+
+**This is the only way to reach text nobody linked.** `pharos task <id>` returns
+the content of every wiki page **linked** to the item — and you can only follow
+a link somebody already made. A design written on a page and never attached to
+the work item is invisible to every other verb here. That is what this finds.
+
+It is also full text. `query --wiql … CONTAINS` matches **titles**; this matches
+descriptions, the discussion, and page bodies.
+
+### What it returns
+
+```jsonc
+{
+  "terms": "retry backoff",
+  "scope": "project",                  // or "organization" with --org
+  "workItems": {
+    "count": 97,                       // the TRUE TOTAL, not what was returned
+    "returned": 25,
+    "results": [
+      { "id": 373, "type": "Issue", "state": "Doing",
+        "title": "…", "assignedTo": "Ada Lovelace", "tags": ["api"],
+        "matched": [                   // WHY this matched — the line itself
+          { "field": "System.Description",
+            "text": ["the backoff doubles each attempt"] } ] }
+    ]
+  },
+  "wiki": {
+    "count": 8, "returned": 8,
+    "results": [
+      { "path": "/Roadmap.md", "wiki": "Contoso.wiki",
+        "matched": [ { "field": "content", "text": ["…one page per feature."] } ] }
+    ]
+  },
+  "more": "Showing the first 25 of each…",   // only when count > returned
+  "problems": []
+}
+```
+
+Four things about that shape, because guessing any of them costs a failed parse:
+
+- **`count` is the total, `returned` is what you got.** They differ constantly —
+  a broad term reports 97 and hands you 25. Reporting `count` as "results I can
+  see" is wrong; reporting `returned` as the total is worse.
+- **`matched[].text` is plain text.** The API wraps hits in `<highlighthit>`
+  markers; they are stripped before you see them.
+- **Field names are normalised to `System.Description`**, the casing everything
+  else here uses. The endpoint itself answers `system.description`.
+- **A surface that failed lands in `problems[]`** and the other still returns —
+  a token that reads the wiki but not work items gets the wiki half. If
+  `problems` is non-empty, say so before reasoning from the result. Both halves
+  failing is a non-zero exit, not an empty answer.
+
+### Code search is NOT here
+
+It needs the Code Search extension installed on the organisation, which a token
+cannot grant. Asking for it would return an empty result that means "not
+provisioned" rather than "no matches", so the verb does not offer it at all.
+`pharos doctor` reports whether this organisation has it.
 
 ## Changing a work item
 
