@@ -208,8 +208,8 @@
         "./skills/pharos"
       ],
       "strict": false,
-      "description": "Drive an Azure DevOps board from the shell with the pharos CLI: which work items are yours or still open, a work item's full context in one call, FULL-TEXT SEARCH across work items and wiki pages, changing fields safely, attaching files and taking them off, inline images in a description, a comment, a wiki page or a wiki comment, @mentions in the form that actually notifies, importing Markdown, Word and PDF files as wiki pages, and the wiki with its comments. Plus the GitHub edge: adopting an issue as a work item linked at both ends, and a PULL REQUEST with its checks, its review and the work item it belongs to. No MCP server and no browser login.",
-      "version": "1.23.0",
+      "description": "Drive an Azure DevOps board from the shell with the pharos CLI: which work items are yours or still open, a work item's full context in one call, FULL-TEXT SEARCH across work items and wiki pages, changing fields safely, attaching files and taking them off, inline images in a description, a comment, a wiki page or a wiki comment, @mentions in the form that actually notifies, importing Markdown, Word and PDF files as wiki pages, and the wiki with its comments. Plus the GitHub edge: adopting an issue as a work item linked at both ends. No MCP server and no browser login.",
+      "version": "1.24.0",
       "author": {
         "name": "Alisina Nawabi",
         "url": "https://www.floh.solutions"

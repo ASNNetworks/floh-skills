@@ -1,6 +1,6 @@
 ---
 name: pharos
-description: "Use for AZURE DEVOPS work — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\"). Covers reading or updating a work item, bug, story or epic; the board, backlog, sprint or iteration; what is assigned to you; reading or writing a wiki page and its comments; searching the board and wiki for a phrase; linking a plan to an epic; attaching a file to a work item or taking one off; inline images in a field or page; @mentioning somebody so they are notified; importing Markdown, Word or PDF as pages; and whether a call is retryable. ALSO the GITHUB ISSUE ↔ work item EDGE: adopting an issue as a work item linked at both ends, bulk-adopting a repo, one reply reaching both, where they drifted, closing both ends together, a PULL REQUEST and its work item, and changing a comment that ALREADY EXISTS: editing, deleting, reacting, hiding, pinning. NOT a GitHub CLI: listing or viewing an issue, or POSTING a comment, is `gh`'s job. NOT for other trackers — Argus, Jira, Linear."
+description: "Use for AZURE DEVOPS work — when the user says Azure DevOps, ADO or dev.azure.com, or names an ADO work item by number (\"pick up 4821\"). Covers reading or updating a work item, bug, story or epic; the board, backlog, sprint or iteration; what is assigned to you; reading or writing a wiki page and its comments; searching the board and wiki for a phrase; linking a plan to an epic; attaching a file to a work item or taking one off; inline images in a field or page; @mentioning somebody so they are notified; importing Markdown, Word or PDF as pages; and whether a call is retryable. ALSO the GITHUB ISSUE ↔ work item EDGE: adopting an issue as a work item linked at both ends, bulk-adopting a repo, one reply reaching both, where they drifted, closing both ends together, and changing a comment that ALREADY EXISTS: editing, deleting, reacting, hiding, pinning. NOT a GitHub CLI: listing or viewing an issue, or POSTING a comment, is `gh`'s job. NOT for other trackers — Argus, Jira, Linear."
 license: Proprietary
 ---
 
@@ -84,13 +84,6 @@ issue say <owner/name#45>      ONE message, TWO audiences: the whole of it to
                                comment's URL to the board. --summary
 issue trail <id|owner/name#45> the whole trail from EITHER end, with the
                                evidence for each half. Read-only
-pr <owner/name#123>            a PULL REQUEST and the work it belongs to:
-                               state, draft, review verdict, WHICH CHECKS ARE
-                               RED, the issues it closes, and the work items it
-                               reaches — via AB#123 in the body OR via an
-                               adopted issue named by "Fixes #45". Also where
-                               the pull request and the board DISAGREE
-                               --no-work-items  skip the transitive lookup
 issue drift                    where the two platforms DISAGREE — the report no
                                other tool can produce. --repo --limit --wiql
 issue backfill <owner/name>    bulk adopt every issue the board does not link
@@ -200,64 +193,6 @@ Do NOT write `[System.State] NOT IN GROUP 'Completed'` if you reach for `--wiql`
 It parses, returns 200, and matches **everything** — `IN GROUP` covers work item
 TYPE categories only, and an unknown group resolves to the empty set with no
 error. Measured, 2026-08-05.
-
-## After adoption, the work becomes code: `pharos pr`
-
-`issue trail` follows filing -> adoption -> close. It stops at the moment the
-work becomes a branch. `pharos pr` is the part that does not.
-
-```bash
-pharos pr contoso/widgets#123              # the pull request AND the board
-pharos pr contoso/widgets#123 --pretty
-pharos pr contoso/widgets#123 --no-work-items   # skip the transitive lookup
-```
-
-One call replaces `gh pr view` + `gh pr checks` + a WIQL query + a relations
-read, across two credentials — and answers one question none of them can.
-
-**Two paths reach a work item, and the implicit one is the one that fires:**
-
-| | |
-|---|---|
-| `AB#4821` in the body | explicit. What Azure Boards' own app reads |
-| `Fixes #45`, where #45 is adopted | **the one that actually happens** |
-
-The second costs one read per closed issue (its comments, where the `pharos:v1`
-trailer lives) and is why `--no-work-items` exists for when you do not need it.
-
-### `disagreements` is the part nothing else can produce
-
-```jsonc
-{
-  "pullRequest": { "number": 123, "state": "MERGED", "merged": true,
-                   "review": "APPROVED", "checks": "FAILURE",
-                   "failingChecks": [ { "name": "e2e-tests", "conclusion": "FAILURE" } ] },
-  "closesIssues": [45],
-  "workItems": [ { "id": 4821, "type": "Issue", "state": "To Do", "title": "…" } ],
-  "disagreements": [
-    "#4821 is \"To Do\" but this pull request is already MERGED — the work shipped and the board never moved."
-  ],
-  "problems": []
-}
-```
-
-Azure DevOps cannot see the pull request and GitHub does not know the work item
-exists, so **neither system will ever report this**. An empty `disagreements`
-means they agree; it is silent when there is nothing to say.
-
-Three things about the shape:
-
-- **`checks` is the rollup and it is authoritative. `failingChecks` names the
-  red ones** — found by filtering every context, not by showing the first few.
-  Measured: real pull requests report a `FAILURE` rollup while their first
-  several contexts all read `SUCCESS`, because the red one is further down.
-- **`NONE` is not `SUCCESS`.** A pull request with no checks configured reports
-  `NONE`, and a still-running one is `PENDING`, not a failure.
-- **`state` has three values** — `OPEN`, `CLOSED`, `MERGED`. Merged is its own
-  state, not a kind of closed, and `merged: true` is the field to test.
-
-Posting a comment on a pull request is still `gh`'s job, exactly as it is for an
-issue. This verb reads; it does not write.
 
 ## Finding where it is WRITTEN: `pharos search`
 
