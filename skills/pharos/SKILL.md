@@ -98,7 +98,10 @@ issue edit <owner/name#45>     the issue's OWN fields, behind a lost-update
 hooks list | check | create | repoint | delete    service hooks for realtime.
                                `check` needs --hub <url>; `list` shows the URL
                                already in use
-plan <file>                    an implementation plan → a work item tree
+plan <file>                    an implementation plan → a work item tree.
+                               The plan file writes Epic/Issue/Task and
+                               To Do/Doing/Done; the run maps them to whatever
+                               THIS project calls those roles
 setup                          org, project, token → keychain + shell profile
                                --install ask|all|a,b  offer the optional
                                capabilities (LibreOffice, poppler, converter,
@@ -595,6 +598,15 @@ states exist" and "which mean finished" are different questions — `Inactive` i
 finished on a Test Plan and appears in nobody's hard-coded Done/Closed/Removed
 list.
 
+**Nothing in this CLI writes a state name it was not told.** `query` reads the
+categories to decide what "open" means, `update` refuses a state the type does
+not have, `issue close` moves an item into the project's own terminal state,
+`issue adopt` and `issue backfill` resolve the work item TYPE by role, and
+`plan` maps its file's `Epic`/`Issue`/`Task` and `To Do`/`Doing`/`Done` onto
+whatever this project calls those roles. Where any of them cannot read the
+project it falls back to the stock names **and says so** — `source: "fallback"`,
+a `note`, or a warning on stderr. If you see one, the answer is a guess.
+
 `pharos whoami` is the other one worth reaching for early: it names the identity
 behind `ADO_PAT`, which is who `@Me` resolves to and who every write is
 attributed to. A shared or service token quietly makes "assigned to me" mean
@@ -950,11 +962,19 @@ pharos issue backfill contoso/widgets --label bug --parent 39 --limit 25 --max-w
 ```
 
 **Read the preview before adding `--yes`.** It names the repository, the `gh`
-account it would be reached as, **and the Azure DevOps organisation and project
-the work items would land on** — nothing in the design pairs a repo with a
-board, and a mis-aimed `adopt` is one work item where a mis-aimed `backfill
---yes` is four hundred, each with a public comment naming a board its reporter
-has nothing to do with.
+account it would be reached as, **the Azure DevOps organisation and project the
+work items would land on**, and **`workItemType` — what they would be created
+as** — nothing in the design pairs a repo with a board, and a mis-aimed `adopt`
+is one work item where a mis-aimed `backfill --yes` is four hundred, each with a
+public comment naming a board its reporter has nothing to do with.
+
+**The type is resolved per issue, from the project, exactly as `adopt` resolves
+it.** It reads which type this project maps to the requirement role and which to
+the bug role, so an issue labelled as a bug becomes a bug and the rest become
+the requirement type — `Issue` and `Issue` on Basic, `Bug` and `User Story` on
+Agile. Every adopted row carries `typeSource` saying which answer it got:
+`category`, `repo-default`, `label`, `flag`, or `fallback` for "the project
+could not be asked". Pass `--type` to pin one for the whole run.
 
 **Each adoption is two writes**, so four hundred issues is eight hundred against
 a default cap of 20. That cost is worked out *before* anything is written and a
