@@ -119,6 +119,10 @@ bridge map|unmap|digest        edit that mapping (--label is an ID, not a name
                                written back to the work item
 doctor                         what is installed on THIS machine, what is
                                missing, and what each missing thing costs
+delegate                       hand a prompt to a coding agent in Terminal or
+                               VS Code — Pharos.app's verb, not usually yours.
+                               You are on the RECEIVING end: see "When a
+                               prompt begins Fetch Azure DevOps work item"
 ```
 
 Text input: `--text` / `--file` / `--stdin`. Global: `--pretty` for a human,
@@ -1302,6 +1306,43 @@ no Azure DevOps account, which is every reporter.
 **Every person uses their own token.** Board attribution is per-person, so
 anything you do is recorded against whoever owns `ADO_PAT`. Never suggest
 sharing one.
+
+## When a prompt begins "Fetch Azure DevOps work item #N with the pharos skill"
+
+That is a **delegation from Pharos**, the macOS board app. Somebody right-
+clicked a work item and chose *Ask Agent*; the app found or started this
+session in the folder linked to that project and typed the prompt in. Only the
+**id** was sent — no title, no URL, no description — on purpose: you fetch the
+item yourself, with the CLI already configured for the right organisation, so
+what you read is what is on the board now rather than a copy the app might
+have got wrong.
+
+So the first move is the usual one, and it is the whole context in one call:
+
+```bash
+pharos task <id>            # description, discussion, attachments, relations, linked pages
+pharos download <id> --all --out ./attachments   # then READ them — images too
+```
+
+Read everything it returns, including the discussion and every attachment and
+image (the section on reading attachments above says how, and `pharos doctor`
+says what this machine can open). Then, **which of the two prompts you got
+decides what happens next**:
+
+- It ends with *"so we can then discuss the task"* — the person wants to talk
+  first. Summarise what the item asks for, what is specified and what is not,
+  and what you would do; then **wait**.
+- It carries instructions after the fetch sentence — the person has already
+  decided. Take the item on as instructed, without asking whether to start.
+
+Either way the reply loop is the board's, not the chat's, because the person
+who delegated is watching the work item in Pharos rather than this pane:
+
+```bash
+pharos update <id> --state Doing          # the moment work starts (`pharos types` for the names)
+pharos comment add <id> --file notes.md   # questions, findings, decisions — on the item
+pharos task <id>                          # re-read before acting on an answer
+```
 
 ## When it is not set up
 
