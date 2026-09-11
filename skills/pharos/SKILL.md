@@ -122,7 +122,13 @@ doctor                         what is installed on THIS machine, what is
 delegate                       hand a prompt to a coding agent in Terminal or
                                VS Code — Pharos.app's verb, not usually yours.
                                You are on the RECEIVING end: see "When a
-                               prompt begins Fetch Azure DevOps work item"
+                               prompt begins Fetch Azure DevOps work item".
+                               `--list` names the sessions already on a folder
+                               (id, name, status, host; `recommended` on the
+                               one a plain delegate takes) and `--session <id>`
+                               picks one of them — or `--session new` for a
+                               fresh one. A pick that has gone answers
+                               `session-gone` and starts nothing
 ```
 
 Text input: `--text` / `--file` / `--stdin`. Global: `--pretty` for a human,
