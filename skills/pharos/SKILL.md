@@ -130,16 +130,34 @@ delegate                       hand a prompt to a coding agent in Terminal,
                                picks one of them — or `--session new` for a
                                fresh one. A pick that has gone answers
                                `session-gone` and starts nothing.
+                               On the VS Code hosts it installs or upgrades
+                               the Pharos bridge extension first when the
+                               editor has none or an older one, then opens
+                               the URI — so a CLI update carries the
+                               extension with it. `--dry-run` says what it
+                               would install and touches nothing.
                                `--host navarch` goes over argusd's own socket
                                and is the one route that can answer
                                `action:"pending"` — a person has to allow the
                                hand-off at a card in Navarch. That is a
                                SUCCESS, not an error; `--status <request>`
                                (the id in `delegation.request`) says what it
-                               became. Its ids are worker UUIDs, and
-                               `--session` there refuses
-                               `session-not-targetable`: the argus op takes a
-                               folder and a kind, never a worker
+                               became. Its ids are worker UUIDs, `--list`
+                               there is argusd's own answer to its own find
+                               (`source:"daemon"`), and `--session` picks any
+                               row it offered
+                               `--gh-account <login>` is navarch's alone: the
+                               GitHub account a worker it STARTS runs as. An
+                               account it does not know is refused
+                               `gh-account-unknown` rather than substituted;
+                               a prompt landing in a worker already running
+                               leaves its account alone and says so. On the
+                               other hosts it is accepted, ignored, and said
+                               to be
+                               A daemon that predates argus #1402 refuses
+                               both `--session` and `--gh-account`
+                               `argusd-outdated` — it would IGNORE them, not
+                               obey them, so nothing is sent
 ```
 
 Text input: `--text` / `--file` / `--stdin`. Global: `--pretty` for a human,
@@ -165,11 +183,16 @@ or winget rather than vendoring anything. **Nothing installs without that flag**
 provision without a terminal.
 
 `--install skill` installs THIS skill as a plugin from the floh-skills
-marketplace. Worth knowing even if you are reading it: **publishing a new
-version does not update an installed one.** `claude plugin update
-pharos@floh-skills` does, and a restart loads it — so a correction can ship and
-sit unread for weeks. If something here contradicts what the tool actually does,
-check your version first.
+marketplace, into **every coding agent on the machine — Claude Code and Codex
+both**, when both are there: Codex reads the same manifest and `pharos doctor`
+reports the two separately, as `skill` and `skill-codex`. Worth knowing even if
+you are reading it: **publishing a new version does not update an installed
+one**, and the command that picks one up is not the same for each. `claude
+plugin update pharos@floh-skills` for Claude Code; `codex plugin marketplace
+upgrade floh-skills` then `codex plugin add pharos@floh-skills` for Codex. Both
+need a restart to load. So a correction can ship and sit unread for weeks — if
+something here contradicts what the tool actually does, check your version
+first.
 
 ## Finding the work: `pharos query`
 
