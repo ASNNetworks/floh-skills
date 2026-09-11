@@ -119,16 +119,27 @@ bridge map|unmap|digest        edit that mapping (--label is an ID, not a name
                                written back to the work item
 doctor                         what is installed on THIS machine, what is
                                missing, and what each missing thing costs
-delegate                       hand a prompt to a coding agent in Terminal or
-                               VS Code — Pharos.app's verb, not usually yours.
-                               You are on the RECEIVING end: see "When a
-                               prompt begins Fetch Azure DevOps work item".
+delegate                       hand a prompt to a coding agent in Terminal,
+                               VS Code or Navarch — Pharos.app's verb, not
+                               usually yours. You are on the RECEIVING end:
+                               see "When a prompt begins Fetch Azure DevOps
+                               work item".
                                `--list` names the sessions already on a folder
                                (id, name, status, host; `recommended` on the
                                one a plain delegate takes) and `--session <id>`
                                picks one of them — or `--session new` for a
                                fresh one. A pick that has gone answers
-                               `session-gone` and starts nothing
+                               `session-gone` and starts nothing.
+                               `--host navarch` goes over argusd's own socket
+                               and is the one route that can answer
+                               `action:"pending"` — a person has to allow the
+                               hand-off at a card in Navarch. That is a
+                               SUCCESS, not an error; `--status <request>`
+                               (the id in `delegation.request`) says what it
+                               became. Its ids are worker UUIDs, and
+                               `--session` there refuses
+                               `session-not-targetable`: the argus op takes a
+                               folder and a kind, never a worker
 ```
 
 Text input: `--text` / `--file` / `--stdin`. Global: `--pretty` for a human,
