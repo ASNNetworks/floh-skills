@@ -158,6 +158,31 @@ delegate                       hand a prompt to a coding agent in Terminal,
                                both `--session` and `--gh-account`
                                `argusd-outdated` — it would IGNORE them, not
                                obey them, so nothing is sent
+                               `--resume <tool>:<id>` opens an OLDER
+                               conversation (a row of `conversations`) and
+                               hands it the prompt: a new `claude --resume` /
+                               `codex resume` IN the folder it ran in, under
+                               its profile. Terminal and VS Code only. A
+                               running one is refused `conversation-live`
+                               with the `route` (`--session <pid>`) to it —
+                               never resumed twice; also `live-unknown`,
+                               `conversation-archived`, `cwd-gone` (no other
+                               folder is substituted), `conversation-unknown`,
+                               `profile-missing`
+conversations                  the past conversations of Claude Code and
+                               Codex on this Mac, newest first — Pharos.app's
+                               "Load conversations…", not usually yours.
+                               Per folder (the cwd, or --folder); --all for
+                               every folder; --agent claude|codex. Each row:
+                               tool, id, name, first_prompt, cwd, turns,
+                               created_at/updated_at, git_branch?, model?,
+                               profile, live + pid?, resumable + reason
+                               (live | live-unknown | archived | cwd-gone).
+                               A folder that is gone and an archived thread
+                               are hidden unless --include-unavailable; sdk
+                               and `codex exec` runs unless
+                               --include-noninteractive. Reads only the
+                               profile this shell runs as; read-only
 ```
 
 Text input: `--text` / `--file` / `--stdin`. Global: `--pretty` for a human,
@@ -1356,6 +1381,11 @@ session in the folder linked to that project and typed the prompt in. Only the
 item yourself, with the CLI already configured for the right organisation, so
 what you read is what is on the board now rather than a copy the app might
 have got wrong.
+
+**It may arrive in a conversation you already had.** The app can also open an
+older conversation again (`pharos delegate --resume`) and hand the prompt to
+that — so earlier turns about this project may be above it. Fetch the item all
+the same: what you discussed then is not what the board says now.
 
 So the first move is the usual one, and it is the whole context in one call:
 
