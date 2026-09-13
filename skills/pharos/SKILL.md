@@ -1162,6 +1162,7 @@ work item never hears about — the exact asymmetry `say` exists to prevent.
   break the link record, and hiding or pinning has no `gh` verb at all.
 - **Jira, Linear, and the Argus board.** Not covered, not planned. "Task",
   "todo" and "board" mean something else there.
+  To put an Azure DevOps item on a board todo, attach its https URL with `attach_integration` — never a `pharos://` link.
 
 **There is no Azure DevOps MCP server here any more, and that is deliberate.**
 It authenticated through the Azure CLI, so it opened a browser mid-task — which
